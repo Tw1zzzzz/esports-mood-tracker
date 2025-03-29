@@ -10,7 +10,7 @@ const navItems = [
     icon: Home,
   },
   {
-    title: "Настроение",
+    title: "Настроение и Энергия",
     href: "/mood",
     icon: Calendar,
   },

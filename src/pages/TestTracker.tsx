@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TestEntry } from "@/types";
@@ -16,6 +16,14 @@ import { getTestEntries, saveTestEntry, updateTestEntry, deleteTestEntry } from 
 import { formatDate, getCurrentWeekRange, getWeekLabel, getPrevWeek, getNextWeek } from "@/utils/dateUtils";
 import { fileToDataUrl, validateImageFile } from "@/utils/fileUtils";
 import { cn } from "@/lib/utils";
+
+const predefinedTests = [
+  {
+    name: "Межличностные отношения",
+    link: "https://psytests.org/classic/leary.html",
+    isWeeklyTest: false
+  }
+];
 
 const TestTracker = () => {
   const { toast } = useToast();
@@ -94,7 +102,6 @@ const TestTracker = () => {
       }
       
       if (editingTest) {
-        // Update existing test
         updateTestEntry(editingTest.id, {
           name,
           link,
@@ -108,7 +115,6 @@ const TestTracker = () => {
           description: "Данные теста успешно обновлены.",
         });
       } else {
-        // Add new test
         saveTestEntry({
           name,
           link,
@@ -344,6 +350,55 @@ const TestTracker = () => {
               <TabsTrigger value="weekly">Еженедельные тесты</TabsTrigger>
             </TabsList>
             <TabsContent value="daily">
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-2">Рекомендуемые тесты</h3>
+                <Card>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Название теста</TableHead>
+                        <TableHead>Ссылка</TableHead>
+                        <TableHead>Действия</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {predefinedTests.filter(test => !test.isWeeklyTest).map((test, index) => (
+                        <TableRow key={`daily-${index}`}>
+                          <TableCell className="font-medium">{test.name}</TableCell>
+                          <TableCell>
+                            <a
+                              href={test.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center text-blue-500 hover:text-blue-700"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-1" />
+                              Открыть тест
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setName(test.name);
+                                setLink(test.link);
+                                setIsWeeklyTest(test.isWeeklyTest);
+                                setDate(new Date());
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Добавить результат
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              </div>
+
               {getDailyTests().length === 0 ? (
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
                   <Image className="h-12 w-12 mx-auto text-gray-300 mb-2" />
@@ -436,6 +491,55 @@ const TestTracker = () => {
             </TabsContent>
             
             <TabsContent value="weekly">
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-2">Рекомендуемые еженедельные тесты</h3>
+                <Card>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Название теста</TableHead>
+                        <TableHead>Ссылка</TableHead>
+                        <TableHead>Действия</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {predefinedTests.filter(test => test.isWeeklyTest).map((test, index) => (
+                        <TableRow key={`weekly-${index}`}>
+                          <TableCell className="font-medium">{test.name}</TableCell>
+                          <TableCell>
+                            <a
+                              href={test.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center text-blue-500 hover:text-blue-700"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-1" />
+                              Открыть тест
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setName(test.name);
+                                setLink(test.link);
+                                setIsWeeklyTest(test.isWeeklyTest);
+                                setDate(new Date());
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Добавить результат
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              </div>
+
               {getWeeklyTests().length === 0 ? (
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
                   <Image className="h-12 w-12 mx-auto text-gray-300 mb-2" />
