@@ -29,3 +29,25 @@ export interface WeeklyData {
   energyAvg: number;
   testsCompleted: number;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: "player" | "staff";
+  photoUrl?: string;
+}
+
+export interface BalanceWheel {
+  id: string;
+  userId: string;
+  date: Date;
+  physical: number;
+  emotional: number;
+  intellectual: number;
+  spiritual: number;
+  occupational: number;
+  social: number;
+  environmental: number;
+  financial: number;
+}
