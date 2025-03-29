@@ -11,8 +11,7 @@ import MoodTracker from "./pages/MoodTracker";
 import TestTracker from "./pages/TestTracker";
 import Statistics from "./pages/Statistics";
 import BalanceWheel from "./pages/BalanceWheel";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
+import Index from "./pages/Index";
 import Profile from "./pages/Profile";
 import PlayersManagement from "./pages/PlayersManagement";
 import NotFound from "./pages/NotFound";
@@ -28,7 +27,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/welcome" replace />;
   }
   
   return <>{children}</>;
@@ -49,6 +48,21 @@ const StaffRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Player-only route component
+const PlayerRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  
+  if (!user || user.role !== "player") {
+    return <Navigate to="/" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -57,10 +71,13 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route path="/welcome" element={<Index />} />
             
-            <Route element={<Layout />}>
+            <Route element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }>
               <Route path="/" element={<Dashboard />} />
               <Route path="/mood" element={<MoodTracker />} />
               <Route path="/tests" element={<TestTracker />} />
@@ -68,20 +85,12 @@ const App = () => (
               
               <Route 
                 path="/balance-wheel" 
-                element={
-                  <ProtectedRoute>
-                    <BalanceWheel />
-                  </ProtectedRoute>
-                } 
+                element={<BalanceWheel />} 
               />
               
               <Route 
                 path="/profile" 
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                } 
+                element={<Profile />} 
               />
               
               <Route 

@@ -178,7 +178,7 @@ const BalanceWheel = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left column - Balance Wheel Form */}
-        <Card className={`${isStaff ? "opacity-50 pointer-events-none" : ""}`}>
+        <Card className={`${!canEdit ? "opacity-50 pointer-events-none" : ""}`}>
           <CardHeader>
             <CardTitle>Заполните ваше колесо баланса</CardTitle>
             <CardDescription>
