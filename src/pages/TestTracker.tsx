@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { getTestEntries, saveTestEntry, updateTestEntry, deleteTestEntry } from 
 import { formatDate, getCurrentWeekRange, getWeekLabel, getPrevWeek, getNextWeek } from "@/utils/dateUtils";
 import { fileToDataUrl, validateImageFile } from "@/utils/fileUtils";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const predefinedTests = [
   {
@@ -27,6 +29,7 @@ const predefinedTests = [
 
 const TestTracker = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [tests, setTests] = useState<TestEntry[]>([]);
   const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
   const [name, setName] = useState<string>("");
@@ -38,6 +41,10 @@ const TestTracker = () => {
   const [editingTest, setEditingTest] = useState<TestEntry | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"daily" | "weekly">("daily");
+  const [isStaffView, setIsStaffView] = useState(false);
+  
+  const isStaff = user?.role === "staff";
+  const canEdit = user?.role === "player";
   
   useEffect(() => {
     loadTests();
@@ -187,136 +194,153 @@ const TestTracker = () => {
             Отслеживайте прогресс по ежедневным и еженедельным тестам
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="mr-2 h-4 w-4" />
-              Добавить тест
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingTest ? "Редактировать тест" : "Добавить новый тест"}
-              </DialogTitle>
-              <DialogDescription>
-                Заполните информацию о тесте и загрузите скриншот
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Название теста</Label>
-                <Input
-                  id="name"
-                  placeholder="Введите название теста"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="link">Ссылка на тест</Label>
-                <div className="flex">
+        
+        {isStaff && (
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={isStaffView} 
+                onChange={() => setIsStaffView(!isStaffView)}
+                className="form-checkbox h-4 w-4"
+              />
+              <span>Просмотр данных всех игроков</span>
+            </label>
+          </div>
+        )}
+        
+        {!isStaff && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm}>
+                <Plus className="mr-2 h-4 w-4" />
+                Добавить тест
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingTest ? "Редактировать тест" : "Добавить новый тест"}
+                </DialogTitle>
+                <DialogDescription>
+                  Заполните информацию о тесте и загрузите скриншот
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Название теста</Label>
                   <Input
-                    id="link"
-                    placeholder="https://..."
-                    value={link}
-                    onChange={(e) => setLink(e.target.value)}
+                    id="name"
+                    placeholder="Введите название теста"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                   />
                 </div>
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="date">Дата</Label>
-                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "justify-start text-left font-normal",
-                        !date && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? formatDate(date) : "Выберите дату"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={(date) => {
-                        date && setDate(date);
-                        setIsDatePickerOpen(false);
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="weekly-test"
-                  checked={isWeeklyTest}
-                  onCheckedChange={setIsWeeklyTest}
-                />
-                <Label htmlFor="weekly-test">Еженедельный тест</Label>
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="screenshot">Скриншот</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="screenshot"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setScreenshot(e.target.files[0]);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  <Label
-                    htmlFor="screenshot"
-                    className="flex h-10 cursor-pointer items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium ring-offset-background hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <Image className="mr-2 h-4 w-4" />
-                    {screenshot ? screenshot.name : (editingTest?.screenshotUrl ? "Изменить скриншот" : "Выбрать файл")}
-                  </Label>
-                  {screenshot && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setScreenshot(null)}
-                    >
-                      Удалить
-                    </Button>
-                  )}
-                </div>
-                {editingTest?.screenshotUrl && !screenshot && (
-                  <div className="mt-2 border rounded-md p-2">
-                    <p className="text-xs text-muted-foreground mb-2">Текущий скриншот:</p>
-                    <img 
-                      src={editingTest.screenshotUrl} 
-                      alt="Текущий скриншот" 
-                      className="max-h-24 rounded-md"
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="link">Ссылка на тест</Label>
+                  <div className="flex">
+                    <Input
+                      id="link"
+                      placeholder="https://..."
+                      value={link}
+                      onChange={(e) => setLink(e.target.value)}
                     />
                   </div>
-                )}
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="date">Дата</Label>
+                  <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "justify-start text-left font-normal",
+                          !date && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? formatDate(date) : "Выберите дату"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(date) => {
+                          date && setDate(date);
+                          setIsDatePickerOpen(false);
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="weekly-test"
+                    checked={isWeeklyTest}
+                    onCheckedChange={setIsWeeklyTest}
+                  />
+                  <Label htmlFor="weekly-test">Еженедельный тест</Label>
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="screenshot">Скриншот</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="screenshot"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setScreenshot(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <Label
+                      htmlFor="screenshot"
+                      className="flex h-10 cursor-pointer items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium ring-offset-background hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Image className="mr-2 h-4 w-4" />
+                      {screenshot ? screenshot.name : (editingTest?.screenshotUrl ? "Изменить скриншот" : "Выбрать файл")}
+                    </Label>
+                    {screenshot && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setScreenshot(null)}
+                      >
+                        Удалить
+                      </Button>
+                    )}
+                  </div>
+                  {editingTest?.screenshotUrl && !screenshot && (
+                    <div className="mt-2 border rounded-md p-2">
+                      <p className="text-xs text-muted-foreground mb-2">Текущий скриншот:</p>
+                      <img 
+                        src={editingTest.screenshotUrl} 
+                        alt="Текущий скриншот" 
+                        className="max-h-24 rounded-md"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Отмена
-              </Button>
-              <Button onClick={handleSubmit}>
-                {editingTest ? "Сохранить изменения" : "Добавить тест"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Отмена
+                </Button>
+                <Button onClick={handleSubmit}>
+                  {editingTest ? "Сохранить изменения" : "Добавить тест"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
       
       <Card>
@@ -377,20 +401,25 @@ const TestTracker = () => {
                             </a>
                           </TableCell>
                           <TableCell>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                setName(test.name);
-                                setLink(test.link);
-                                setIsWeeklyTest(test.isWeeklyTest);
-                                setDate(new Date());
-                                setIsDialogOpen(true);
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Добавить результат
-                            </Button>
+                            {!isStaff && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  setName(test.name);
+                                  setLink(test.link);
+                                  setIsWeeklyTest(test.isWeeklyTest);
+                                  setDate(new Date());
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Добавить результат
+                              </Button>
+                            )}
+                            {isStaff && (
+                              <span className="text-sm text-muted-foreground">Только для игроков</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -403,18 +432,20 @@ const TestTracker = () => {
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
                   <Image className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                   <p className="text-gray-500">Нет ежедневных тестов на эту неделю</p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => {
-                      resetForm();
-                      setIsWeeklyTest(false);
-                      setIsDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Добавить ежедневный тест
-                  </Button>
+                  {!isStaff && (
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        resetForm();
+                        setIsWeeklyTest(false);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Добавить ежедневный тест
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-md border">
@@ -468,21 +499,28 @@ const TestTracker = () => {
                           )}
                         </div>
                         <div className="col-span-2 flex space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(test)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => handleDelete(test.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!isStaff && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(test)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-500 hover:text-red-700"
+                                onClick={() => handleDelete(test.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {isStaff && (
+                            <span className="text-sm text-muted-foreground">Просмотр</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -518,20 +556,25 @@ const TestTracker = () => {
                             </a>
                           </TableCell>
                           <TableCell>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                setName(test.name);
-                                setLink(test.link);
-                                setIsWeeklyTest(test.isWeeklyTest);
-                                setDate(new Date());
-                                setIsDialogOpen(true);
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Добавить результат
-                            </Button>
+                            {!isStaff && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  setName(test.name);
+                                  setLink(test.link);
+                                  setIsWeeklyTest(test.isWeeklyTest);
+                                  setDate(new Date());
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Добавить результат
+                              </Button>
+                            )}
+                            {isStaff && (
+                              <span className="text-sm text-muted-foreground">Только для игроков</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -544,18 +587,20 @@ const TestTracker = () => {
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
                   <Image className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                   <p className="text-gray-500">Нет еженедельных тестов на эту неделю</p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => {
-                      resetForm();
-                      setIsWeeklyTest(true);
-                      setIsDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Добавить еженедельный тест
-                  </Button>
+                  {!isStaff && (
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        resetForm();
+                        setIsWeeklyTest(true);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Добавить еженедельный тест
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-md border">
@@ -609,21 +654,28 @@ const TestTracker = () => {
                           )}
                         </div>
                         <div className="col-span-2 flex space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(test)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => handleDelete(test.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!isStaff && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(test)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-500 hover:text-red-700"
+                                onClick={() => handleDelete(test.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {isStaff && (
+                            <span className="text-sm text-muted-foreground">Просмотр</span>
+                          )}
                         </div>
                       </div>
                     ))}
