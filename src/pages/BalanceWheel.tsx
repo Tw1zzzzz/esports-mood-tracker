@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { BalanceWheel as BalanceWheelType } from "@/types";
 import { ResponsiveRadar } from '@nivo/radar';
 
@@ -68,7 +68,14 @@ const BalanceWheel = () => {
         id: Math.random().toString(36).substring(7),
         userId: user.id,
         date: new Date(date),
-        ...values
+        physical: values.physical,
+        emotional: values.emotional,
+        intellectual: values.intellectual,
+        spiritual: values.spiritual,
+        occupational: values.occupational,
+        social: values.social,
+        environmental: values.environmental,
+        financial: values.financial
       };
 
       // In a real app, save to API/database
@@ -166,7 +173,7 @@ const BalanceWheel = () => {
             keys={categories.map(c => c.id)}
             indexBy="name"
             maxValue={10}
-            margin={{ top: 70, right:.8, bottom: 40, left: 80 }}
+            margin={{ top: 70, right: 80, bottom: 40, left: 80 }}
             borderColor={{ from: 'color' }}
             gridLabelOffset={36}
             dotSize={10}
