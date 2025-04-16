@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "react-hot-toast";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -14,20 +14,28 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (!email || !password) {
+      toast.error("Пожалуйста, заполните все поля");
       return;
     }
     
     setIsLoading(true);
     
     try {
-      await login(email, password);
-      navigate("/");
+      const result = await login(email, password);
+      
+      if (result.success) {
+        toast.success("Вход выполнен успешно");
+        navigate("/dashboard");
+      } else {
+        toast.error(result.error || "Ошибка при входе в систему");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("Ошибка аутентификации:", error);
+      toast.error("Не удалось выполнить вход. Пожалуйста, попробуйте позже.");
     } finally {
       setIsLoading(false);
     }

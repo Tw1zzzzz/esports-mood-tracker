@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "react-hot-toast";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -17,20 +17,28 @@ const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (!name || !email || !password) {
+      toast.error("Пожалуйста, заполните все поля");
       return;
     }
     
     setIsLoading(true);
     
     try {
-      await register(email, password, name, role);
-      navigate("/");
+      const result = await register(name, email, password, role);
+      
+      if (result.success) {
+        toast.success("Регистрация прошла успешно");
+        navigate("/dashboard");
+      } else {
+        toast.error(result.error || "Ошибка при регистрации");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("Ошибка при регистрации:", error);
+      toast.error("Не удалось создать аккаунт. Пожалуйста, попробуйте позже.");
     } finally {
       setIsLoading(false);
     }

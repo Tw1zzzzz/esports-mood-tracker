@@ -1,20 +1,17 @@
-
 export interface MoodEntry {
   id: string;
-  date: Date;
-  timeOfDay: "morning" | "afternoon" | "evening";
+  date: string;
   mood: number;
   energy: number;
-  comment?: string;
+  notes?: string;
 }
 
 export interface TestEntry {
   id: string;
-  date: Date;
-  name: string;
-  link: string;
-  screenshotUrl?: string;
-  isWeeklyTest: boolean;
+  date: string;
+  type: string;
+  score: number;
+  notes?: string;
 }
 
 export interface StatsData {
@@ -24,10 +21,13 @@ export interface StatsData {
 }
 
 export interface WeeklyData {
-  week: string;
-  moodAvg: number;
-  energyAvg: number;
-  testsCompleted: number;
+  date?: string;
+  week?: string;
+  mood?: number;
+  energy?: number;
+  moodAvg?: number;
+  energyAvg?: number;
+  testsCompleted?: number;
 }
 
 export interface User {
@@ -35,13 +35,28 @@ export interface User {
   email: string;
   name: string;
   role: "player" | "staff";
+  completedTests?: boolean;
+  completedBalanceWheel?: boolean;
+  createdAt?: string;
   photoUrl?: string;
 }
 
 export interface BalanceWheel {
   id: string;
   userId: string;
+  playerName?: string;
   date: Date;
+  physical: number;
+  emotional: number;
+  intellectual: number;
+  spiritual: number;
+  occupational: number;
+  social: number;
+  environmental: number;
+  financial: number;
+}
+
+export interface BalanceWheelData {
   physical: number;
   emotional: number;
   intellectual: number;

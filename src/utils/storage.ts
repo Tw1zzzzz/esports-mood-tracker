@@ -1,13 +1,23 @@
-
 import { MoodEntry, TestEntry } from "@/types";
 
+// Генерируем уникальные ключи для каждого пользователя
+const getUserStorageKey = (baseKey: string) => {
+  const user = localStorage.getItem('token');
+  if (!user) return baseKey;
+  
+  // Используем ID пользователя как часть ключа
+  const token = user;
+  return `${baseKey}-${token}`;
+};
+
 // Local Storage Keys
-const MOOD_ENTRIES_KEY = "esports-mood-entries";
-const TEST_ENTRIES_KEY = "esports-test-entries";
+const MOOD_ENTRIES_BASE_KEY = "esports-mood-entries";
+const TEST_ENTRIES_BASE_KEY = "esports-test-entries";
 
 // Mood Entries
 export const getMoodEntries = (): MoodEntry[] => {
-  const entries = localStorage.getItem(MOOD_ENTRIES_KEY);
+  const storageKey = getUserStorageKey(MOOD_ENTRIES_BASE_KEY);
+  const entries = localStorage.getItem(storageKey);
   
   if (!entries) {
     return [];
@@ -31,7 +41,8 @@ export const saveMoodEntry = (entry: Omit<MoodEntry, "id">): MoodEntry => {
     id: Date.now().toString(),
   };
   
-  localStorage.setItem(MOOD_ENTRIES_KEY, JSON.stringify([...entries, newEntry]));
+  const storageKey = getUserStorageKey(MOOD_ENTRIES_BASE_KEY);
+  localStorage.setItem(storageKey, JSON.stringify([...entries, newEntry]));
   
   return newEntry;
 };
@@ -40,12 +51,14 @@ export const deleteMoodEntry = (id: string): void => {
   const entries = getMoodEntries();
   const filteredEntries = entries.filter(entry => entry.id !== id);
   
-  localStorage.setItem(MOOD_ENTRIES_KEY, JSON.stringify(filteredEntries));
+  const storageKey = getUserStorageKey(MOOD_ENTRIES_BASE_KEY);
+  localStorage.setItem(storageKey, JSON.stringify(filteredEntries));
 };
 
 // Test Entries
 export const getTestEntries = (): TestEntry[] => {
-  const entries = localStorage.getItem(TEST_ENTRIES_KEY);
+  const storageKey = getUserStorageKey(TEST_ENTRIES_BASE_KEY);
+  const entries = localStorage.getItem(storageKey);
   
   if (!entries) {
     return [];
@@ -69,7 +82,8 @@ export const saveTestEntry = (entry: Omit<TestEntry, "id">): TestEntry => {
     id: Date.now().toString(),
   };
   
-  localStorage.setItem(TEST_ENTRIES_KEY, JSON.stringify([...entries, newEntry]));
+  const storageKey = getUserStorageKey(TEST_ENTRIES_BASE_KEY);
+  localStorage.setItem(storageKey, JSON.stringify([...entries, newEntry]));
   
   return newEntry;
 };
@@ -85,7 +99,8 @@ export const updateTestEntry = (id: string, updates: Partial<TestEntry>): TestEn
   const updatedEntry = { ...entries[entryIndex], ...updates };
   entries[entryIndex] = updatedEntry;
   
-  localStorage.setItem(TEST_ENTRIES_KEY, JSON.stringify(entries));
+  const storageKey = getUserStorageKey(TEST_ENTRIES_BASE_KEY);
+  localStorage.setItem(storageKey, JSON.stringify(entries));
   
   return updatedEntry;
 };
@@ -94,5 +109,6 @@ export const deleteTestEntry = (id: string): void => {
   const entries = getTestEntries();
   const filteredEntries = entries.filter(entry => entry.id !== id);
   
-  localStorage.setItem(TEST_ENTRIES_KEY, JSON.stringify(filteredEntries));
+  const storageKey = getUserStorageKey(TEST_ENTRIES_BASE_KEY);
+  localStorage.setItem(storageKey, JSON.stringify(filteredEntries));
 };

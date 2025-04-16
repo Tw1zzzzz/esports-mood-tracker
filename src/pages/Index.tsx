@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -30,12 +29,15 @@ const Index = () => {
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
   const [registerRole, setRegisterRole] = useState<"player" | "staff">("player");
-  
-  // If already logged in, redirect to dashboard
-  if (user) {
-    navigate("/");
-    return null;
-  }
+
+  // Handle navigation after render
+  useEffect(() => {
+    console.log('User state changed:', user);
+    if (user) {
+      console.log('User is authenticated, navigating to dashboard');
+      navigate("/");
+    }
+  }, [user, navigate]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +50,9 @@ const Index = () => {
     try {
       setLoading(true);
       await login(loginEmail, loginPassword);
-      navigate("/");
+      console.log('Login successful, ready to navigate');
     } catch (error) {
-      console.error(error);
+      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }
@@ -67,9 +69,9 @@ const Index = () => {
     try {
       setLoading(true);
       await register(registerEmail, registerPassword, registerName, registerRole);
-      navigate("/");
+      console.log('Registration successful, ready to navigate');
     } catch (error) {
-      console.error(error);
+      console.error('Registration error:', error);
     } finally {
       setLoading(false);
     }

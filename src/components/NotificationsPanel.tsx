@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -9,6 +8,8 @@ import {
 } from "@/components/ui/popover";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 
 // Mock notifications - in a real app would come from an API/database
 const MOCK_NOTIFICATIONS = [
@@ -61,12 +62,12 @@ const NotificationsPanel = () => {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-gray-500" />
+        <Button variant="ghost" size="icon" className="relative" aria-label="Уведомления">
+          <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+            <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center">
               {unreadCount}
-            </span>
+            </Badge>
           )}
         </Button>
       </PopoverTrigger>
@@ -87,33 +88,36 @@ const NotificationsPanel = () => {
         <Separator />
         <ScrollArea className="h-80">
           {notifications.length > 0 ? (
-            <div className="divide-y">
+            <div>
               {notifications.map((notification) => (
-                <div 
+                <Card 
                   key={notification.id} 
-                  className={`p-4 hover:bg-muted/30 cursor-pointer transition-colors ${
-                    !notification.read ? "bg-muted/10" : ""
-                  }`}
-                  onClick={() => handleMarkAsRead(notification.id)}
+                  className={`border-0 rounded-none ${!notification.read ? "bg-muted/10" : ""}`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-sm">{notification.title}</h4>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {notification.description}
-                      </p>
+                  <CardContent 
+                    className="p-4 hover:bg-muted/30 cursor-pointer"
+                    onClick={() => handleMarkAsRead(notification.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-medium text-sm">{notification.title}</h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {notification.description}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs font-normal">
+                        {formatDate(notification.date)}
+                      </Badge>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(notification.date)}
-                    </span>
-                  </div>
-                  
-                  {!notification.read && (
-                    <div className="mt-2 flex justify-end">
-                      <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                    </div>
-                  )}
-                </div>
+                    
+                    {!notification.read && (
+                      <div className="mt-2 flex justify-end">
+                        <div className="h-2 w-2 bg-primary rounded-full"></div>
+                      </div>
+                    )}
+                  </CardContent>
+                  <Separator />
+                </Card>
               ))}
             </div>
           ) : (

@@ -60,6 +60,28 @@ This project is built with .
 - shadcn-ui
 - Tailwind CSS
 
+## React DevTools
+
+Проект настроен для работы с React DevTools в отдельном приложении. Для использования:
+
+1. Запустите сервер React DevTools с помощью команды:
+   ```sh
+   npm run dev:react-devtools
+   ```
+
+2. В отдельном терминале запустите приложение стандартным способом:
+   ```sh
+   npm run dev
+   ```
+
+3. React DevTools автоматически подключится к вашему приложению через скрипт в index.html. Окно React DevTools отобразит иерархию компонентов вашего приложения.
+
+4. Если у вас возникают проблемы с подключением:
+   - Убедитесь, что сервер React DevTools запущен и работает на порту 8097
+   - Проверьте, что в index.html присутствует строка `<script src="http://localhost:8097"></script>`
+   - Перезагрузите страницу приложения
+   - Проверьте версии пакетов: `npm list react-devtools-core`
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/c9f8034d-b680-4012-8ee1-33e7a2bc97bb) and click on Share -> Publish.

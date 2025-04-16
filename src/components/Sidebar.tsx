@@ -1,8 +1,12 @@
-
 import { Link, useLocation } from "react-router-dom";
-import { BarChart2, Calendar, Home, ListTodo, User, Users, LogOut } from "lucide-react";
+import { BarChart2, Calendar, Home, ListTodo, User, Users, LogOut, CircleDot, Trophy, BarChart, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { COLORS } from "@/styles/theme";
 
 const getNavItems = (role: "player" | "staff" | null) => {
   const baseItems = [
@@ -27,11 +31,42 @@ const getNavItems = (role: "player" | "staff" | null) => {
       icon: BarChart2,
     },
     {
-      title: "Колесо баланса",
-      href: "/balance-wheel",
-      icon: Users,
+      title: "Аналитика",
+      href: "/analytics",
+      icon: BarChart,
     },
   ];
+
+  // Add balance wheel but with different paths based on role
+  if (role === "player") {
+    baseItems.push({
+      title: "Колесо баланса",
+      href: "/balance-wheel",
+      icon: CircleDot,
+    });
+  } else if (role === "staff") {
+    baseItems.push({
+      title: "Колесо баланса",
+      href: "/staff-balance-wheel",
+      icon: CircleDot,
+    });
+  }
+  
+  // Add items for both roles
+  if (role) { // Доступно для всех аутентифицированных пользователей
+    baseItems.push({
+      title: "Топ игроков",
+      href: "/top-players",
+      icon: Trophy,
+    });
+    
+    // Добавляем пункт Файловое хранилище для всех аутентифицированных пользователей
+    baseItems.push({
+      title: "Файловое хранилище",
+      href: "/file-storage",
+      icon: FolderOpen,
+    });
+  }
 
   // Add staff-only items
   if (role === "staff") {
@@ -59,43 +94,92 @@ const Sidebar = () => {
   const { user, logout } = useAuth();
   const navItems = getNavItems(user?.role || null);
 
+  // Стили для сайдбара
+  const sidebarStyles = {
+    backgroundColor: COLORS.backgroundColor,
+    color: COLORS.textColor,
+    borderRight: `1px solid ${COLORS.borderColor}`
+  };
+
+  // Стили для активного и неактивного пункта меню
+  const getButtonStyles = (isActive: boolean) => ({
+    backgroundColor: isActive ? COLORS.primary + "20" : "transparent",
+    color: isActive ? COLORS.primary : COLORS.textColorSecondary,
+    ":hover": {
+      backgroundColor: COLORS.primary + "10",
+      color: COLORS.textColor
+    }
+  });
+
   return (
-    <aside className="bg-esports-blue text-white h-screen w-64 flex flex-col">
+    <aside className="h-screen w-64 flex flex-col" style={sidebarStyles}>
       <div className="p-6">
-        <h2 className="text-xl font-bold">eSports Tracker</h2>
+        <h2 className="text-xl font-bold font-heading" style={{ color: COLORS.primary }}>eSports Tracker</h2>
       </div>
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {navItems.map((item) => (
-            <li key={item.href}>
-              <Link
-                to={item.href}
-                className={cn(
-                  "flex items-center space-x-3 px-4 py-3 rounded-md text-sm font-medium transition-colors",
-                  location.pathname === item.href
-                    ? "bg-white/10 text-white"
-                    : "text-white/70 hover:text-white hover:bg-white/10"
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.title}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      
+      <ScrollArea className="flex-1">
+        <nav className="px-4 py-2">
+          <ul className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <li key={item.href}>
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link to={item.href} className="block">
+                          <Button
+                            variant="ghost"
+                            className={cn(
+                              "w-full justify-start h-10",
+                              isActive 
+                                ? "text-primary" 
+                                : "text-secondary hover:text-primary-foreground"
+                            )}
+                            style={{
+                              backgroundColor: isActive ? COLORS.primary + "20" : "transparent",
+                              color: isActive ? COLORS.primary : COLORS.textColorSecondary
+                            }}
+                          >
+                            <item.icon className="mr-2 h-5 w-5" />
+                            <span>{item.title}</span>
+                          </Button>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" style={{
+                        backgroundColor: COLORS.cardBackground,
+                        color: COLORS.textColor,
+                        borderColor: COLORS.borderColor
+                      }}>
+                        {item.title}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </ScrollArea>
+      
       {user && (
-        <div className="p-4 border-t border-white/10">
-          <button
-            onClick={logout}
-            className="flex items-center space-x-3 px-4 py-3 rounded-md text-sm font-medium transition-colors text-white/70 hover:text-white hover:bg-white/10 w-full"
-          >
-            <LogOut className="h-5 w-5" />
-            <span>Выход</span>
-          </button>
-        </div>
+        <>
+          <Separator className="my-2" style={{ backgroundColor: COLORS.borderColor }} />
+          <div className="p-4">
+            <Button
+              onClick={logout}
+              variant="ghost"
+              className="w-full justify-start"
+              style={{ color: COLORS.textColorSecondary }}
+            >
+              <LogOut className="mr-2 h-5 w-5" />
+              <span>Выход</span>
+            </Button>
+          </div>
+        </>
       )}
-      <div className="p-4 text-sm text-white/50">
+      
+      <div className="p-4 text-sm" style={{ color: COLORS.textColorSecondary }}>
         <p>© 2023 eSports Tracker</p>
       </div>
     </aside>

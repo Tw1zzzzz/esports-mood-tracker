@@ -1,0 +1,120 @@
+import express from 'express';
+import User from '../models/User';
+import MoodEntry from '../models/MoodEntry';
+import TestEntry from '../models/TestEntry';
+import { protect, isStaff } from '../middleware/auth';
+
+const router = express.Router();
+
+// Get all players (staff only)
+router.get('/players', protect, isStaff, async (_req: any, res) => {
+  try {
+    console.log('Fetching all players');
+    const players = await User.find({ role: 'player' })
+      .select('name email completedTests completedBalanceWheel createdAt')
+      .sort({ createdAt: -1 });
+
+    console.log(`Found ${players.length} players`);
+    return res.json(players);
+  } catch (error) {
+    console.error('Error fetching players:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get player statistics (staff only)
+router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
+  try {
+    console.log('Fetching stats for player:', req.params.id);
+    const player = await User.findById(req.params.id)
+      .select('name email completedTests completedBalanceWheel createdAt')
+      .sort({ createdAt: -1 });
+
+    if (!player) {
+      console.log('Player not found:', req.params.id);
+      return res.status(404).json({ message: 'Player not found' });
+    }
+
+    // Добавляем получение данных о настроении и энергии
+    const moodEntries = await MoodEntry.find({ userId: req.params.id })
+      .sort({ date: -1 });
+    
+    // Добавляем получение данных о тестах
+    const testEntries = await TestEntry.find({ userId: req.params.id })
+      .sort({ date: -1 });
+
+    // Формируем объект с полной статистикой игрока
+    const playerData = {
+      _id: player._id,
+      name: player.name,
+      email: player.email,
+      completedTests: player.completedTests,
+      completedBalanceWheel: player.completedBalanceWheel,
+      createdAt: player.createdAt,
+      moodEntries,
+      testEntries
+    };
+
+    console.log('Player stats found with details:', player._id);
+    return res.json(playerData);
+  } catch (error) {
+    console.error('Error fetching player stats:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete player (staff only)
+router.delete('/players/:id', protect, isStaff, async (req: any, res) => {
+  try {
+    console.log('Attempting to delete player:', req.params.id);
+    const player = await User.findById(req.params.id);
+    
+    if (!player) {
+      console.log('Player not found for deletion:', req.params.id);
+      return res.status(404).json({ message: 'Player not found' });
+    }
+
+    if (player.role !== 'player') {
+      console.log('Attempted to delete non-player user:', req.params.id);
+      return res.status(400).json({ message: 'Can only delete players' });
+    }
+
+    await player.deleteOne();
+    console.log('Player deleted successfully:', req.params.id);
+    return res.json({ message: 'Player deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting player:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update player status (staff only)
+router.patch('/players/:id/status', protect, isStaff, async (req: any, res) => {
+  try {
+    console.log('Updating status for player:', req.params.id);
+    const { completedTests, completedBalanceWheel } = req.body;
+    const player = await User.findById(req.params.id);
+    
+    if (!player) {
+      console.log('Player not found for status update:', req.params.id);
+      return res.status(404).json({ message: 'Player not found' });
+    }
+
+    if (player.role !== 'player') {
+      console.log('Attempted to update status of non-player user:', req.params.id);
+      return res.status(400).json({ message: 'Can only update players' });
+    }
+
+    player.completedTests = completedTests;
+    player.completedBalanceWheel = completedBalanceWheel;
+    await player.save();
+
+    console.log('Player status updated successfully:', req.params.id);
+    return res.json(player);
+  } catch (error) {
+    console.error('Error updating player status:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+export default router; 

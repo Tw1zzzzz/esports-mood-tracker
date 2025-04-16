@@ -1,142 +1,149 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User } from "@/types";
 import { toast } from "sonner";
+import { makeAuthRequest, handleApiError } from "@/utils/apiUtils";
+import ROUTES from "@/lib/routes";
 
+// Задаем базовый URL для API
+const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
+
+// Типы для аутентификации
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, role: "player" | "staff") => Promise<void>;
+  error: string | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; user?: User | null; error?: string }>;
+  register: (name: string, email: string, password: string, role?: string) => Promise<{ success: boolean; user?: User | null; error?: string }>;
   logout: () => void;
   deleteAccount: () => Promise<void>;
 }
 
-// Mock users for demonstration
-const MOCK_USERS: User[] = [
-  {
-    id: "1",
-    email: "player@example.com",
-    name: "Test Player",
-    role: "player"
-  },
-  {
-    id: "2", 
-    email: "staff@example.com",
-    name: "Test Staff",
-    role: "staff"
-  }
-];
+interface AuthResponse {
+  token: string;
+  user: User;
+}
 
+// Создание контекста
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
+  // Проверка сессии пользователя
   useEffect(() => {
-    // Check for saved user in localStorage
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string) => {
-    try {
-      setLoading(true);
-      // Mock login - in a real app, this would be an API call
-      const foundUser = MOCK_USERS.find(u => u.email === email);
-      
-      if (foundUser) {
-        setUser(foundUser);
-        localStorage.setItem("user", JSON.stringify(foundUser));
-        toast.success("Успешный вход в систему");
+    const checkUserSession = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setUser(null);
+        setLoading(false);
         return;
       }
       
-      throw new Error("Неверные учетные данные");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ошибка входа");
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const register = async (email: string, password: string, name: string, role: "player" | "staff") => {
-    try {
-      setLoading(true);
-      // Mock registration - in a real app, this would be an API call
-      const existingUser = MOCK_USERS.find(u => u.email === email);
-      
-      if (existingUser) {
-        throw new Error("Пользователь с таким email уже существует");
+      try {
+        const userData = await makeAuthRequest<User>('get', '/auth/me');
+        setUser(userData);
+      } catch (error: any) {
+        localStorage.removeItem("token");
+        setUser(null);
+        
+        if (error.response?.status === 401) {
+          toast.error("Сессия истекла. Пожалуйста, войдите снова.");
+        }
+      } finally {
+        setLoading(false);
       }
+    };
+    
+    checkUserSession();
+  }, []);
+
+  // Функция входа
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await makeAuthRequest<AuthResponse>('post', '/auth/login', { email, password });
       
-      const newUser: User = {
-        id: Math.random().toString(36).substring(7),
-        email,
-        name,
-        role
-      };
+      localStorage.setItem('token', response.token);
+      setUser(response.user);
       
-      // In a real app, we'd save this to a database
-      MOCK_USERS.push(newUser);
+      toast.success(`Добро пожаловать, ${response.user.name}!`);
+      return { success: true, user: response.user };
+    } catch (error: any) {
+      const errorMsg = handleApiError(error, 'Ошибка при входе');
+      setError(errorMsg);
+      toast.error(errorMsg);
       
-      setUser(newUser);
-      localStorage.setItem("user", JSON.stringify(newUser));
-      toast.success("Регистрация успешна");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ошибка регистрации");
-      throw error;
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("user");
-    setUser(null);
-    toast.success("Выход выполнен успешно");
+  // Функция регистрации
+  const register = async (name: string, email: string, password: string, role: string = 'player') => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await makeAuthRequest<AuthResponse>('post', '/auth/register', { 
+        name, email, password, role 
+      });
+      
+      localStorage.setItem('token', response.token);
+      setUser(response.user);
+      
+      toast.success(`Аккаунт успешно создан! Добро пожаловать, ${response.user.name}!`);
+      return { success: true, user: response.user };
+    } catch (error: any) {
+      const errorMsg = handleApiError(error, 'Ошибка при регистрации');
+      setError(errorMsg);
+      toast.error(errorMsg);
+      
+      return { success: false, error: errorMsg };
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Функция выхода
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+    toast.success("Вы вышли из системы");
+  };
+
+  // Функция удаления аккаунта
   const deleteAccount = async () => {
     try {
       setLoading(true);
-      // Mock delete account - in a real app, this would be an API call
-      if (!user) {
-        throw new Error("Пользователь не найден");
-      }
-      
-      // In a real app, we'd delete from the database
-      const index = MOCK_USERS.findIndex(u => u.id === user.id);
-      if (index !== -1) {
-        MOCK_USERS.splice(index, 1);
-      }
-      
-      localStorage.removeItem("user");
-      setUser(null);
+      await makeAuthRequest('delete', '/auth/me');
+      logout();
       toast.success("Аккаунт успешно удален");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ошибка удаления аккаунта");
+    } catch (error: any) {
+      const errorMsg = handleApiError(error, 'Ошибка удаления аккаунта');
+      toast.error(errorMsg);
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
+  const value = {
+    user,
+    loading,
+    error,
+    login,
+    register,
+    logout,
+    deleteAccount
+  };
+
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        loading, 
-        login, 
-        register, 
-        logout, 
-        deleteAccount 
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
