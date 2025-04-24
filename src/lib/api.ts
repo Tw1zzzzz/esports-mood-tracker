@@ -100,7 +100,7 @@ interface BalanceWheelData {
 }
 
 interface MoodEntryData {
-  date: Date;
+  date: string;
   timeOfDay: "morning" | "afternoon" | "evening";
   mood: number;
   energy: number;
@@ -120,10 +120,23 @@ interface PlayerStatusUpdate {
   completedBalanceWheel?: boolean;
 }
 
+// Типы данных для API аналитики
+interface AnalyticsMetricsData {
+  mood: number;
+  balanceWheel?: {
+    health: number;
+    social: number;
+    skills: number;
+    [key: string]: number;
+  };
+  matchId?: string;
+}
+
 // API для работы с игроками (для staff)
 export const getPlayers = () => retryRequest(() => api.get('/users/players'));
 export const getPlayerStats = (playerId: string) => retryRequest(() => api.get(`/users/players/${playerId}/stats`));
 export const deletePlayer = (playerId: string) => retryRequest(() => api.delete(`/users/players/${playerId}`));
+export const deletePlayerComplete = (playerId: string) => retryRequest(() => api.delete(`/users/players/${playerId}/complete`));
 export const updatePlayerStatus = (playerId: string, status: PlayerStatusUpdate) => 
   retryRequest(() => api.patch(`/users/players/${playerId}/status`, status));
 
@@ -204,5 +217,66 @@ export const getPlayerTestEntries = (playerId: string) => retryRequest(() => api
 
 // Вспомогательные функции
 export const getToken = () => localStorage.getItem('token');
+
+// API для получения данных о настроении и энергии игроков с фильтрацией по дате
+export const getPlayerMoodByDate = (playerId: string, date: string) => 
+  retryRequest(() => api.get(`/mood/player/${playerId}/by-date?date=${date}`));
+
+// API для получения данных для графика с фильтрацией по дате
+export const getPlayerMoodChartDataByDate = (playerId: string, date: string) => 
+  retryRequest(() => api.get(`/stats/players/${playerId}/mood/chart?date=${date}`));
+
+// API для получения данных активности игрока (для мини-графика)
+export const getPlayerActivityData = (playerId: string, days: number = 14) => 
+  retryRequest(() => api.get(`/stats/players/${playerId}/activity?days=${days}`));
+
+// API для получения всех данных о настроении игроков с фильтрацией по дате
+export const getAllPlayersMoodStatsByDate = (date: string) => 
+  retryRequest(() => api.get(`/stats/players/mood?date=${date}`));
+
+// API для работы с Faceit
+export const initFaceitOAuth = () => retryRequest(() => api.get('/faceit/oauth/init'));
+export const importFaceitMatches = () => retryRequest(() => api.post('/faceit/import-matches'));
+export const checkFaceitStatus = () => retryRequest(() => api.get('/faceit/status'));
+
+// API для работы с аналитикой
+export const getAnalyticsStats = (fromDate?: string, toDate?: string, gameType?: string) => {
+  let url = '/analytics/stats';
+  const params = [];
+  
+  if (fromDate) params.push(`from=${fromDate}`);
+  if (toDate) params.push(`to=${toDate}`);
+  if (gameType) params.push(`type=${gameType}`);
+  
+  if (params.length > 0) {
+    url += `?${params.join('&')}`;
+  }
+  
+  return retryRequest(() => api.get(url));
+};
+
+export const getAnalyticsMetrics = (limit?: number) => {
+  let url = '/analytics/metrics';
+  if (limit) url += `?limit=${limit}`;
+  
+  return retryRequest(() => api.get(url));
+};
+
+export const saveAnalyticsMetrics = (data: AnalyticsMetricsData) => 
+  retryRequest(() => api.post('/analytics/metrics', data));
+
+export const getRecentMatches = (limit?: number) => {
+  let url = '/analytics/matches';
+  if (limit) url += `?limit=${limit}`;
+  
+  return retryRequest(() => api.get(url));
+};
+
+export const refreshAnalyticsCache = () => retryRequest(() => api.post('/analytics/refresh-cache'));
+
+// API для аналитики, доступные для всех пользователей
+export const getAnalyticsMoodStats = () => retryRequest(() => api.get('/stats/analytics/mood'));
+export const getAnalyticsTestStats = () => retryRequest(() => api.get('/stats/analytics/tests'));
+export const getAnalyticsBalanceWheelStats = () => retryRequest(() => api.get('/stats/analytics/balance-wheel'));
 
 export default api; 

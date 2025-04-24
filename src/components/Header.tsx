@@ -6,6 +6,8 @@ import SyncStatusIndicator from "./SyncStatusIndicator";
 import { useAuth } from "@/hooks/useAuth";
 import { Separator } from "@/components/ui/separator";
 import { COLORS } from "@/styles/theme";
+// Импортируем логотипы
+import logoSvg from "@/assets/1win-logo.svg";
 
 const Header = () => {
   const { user } = useAuth();
@@ -17,13 +19,30 @@ const Header = () => {
     color: COLORS.textColor
   };
 
+  // Стиль для логотипа 1win с увеличенным размером
+  const logoStyle = {
+    height: '4.5rem',
+    maxWidth: '220px',
+    objectFit: 'contain' as const,
+    borderRadius: '8px',
+    padding: '4px',
+    background: 'rgba(29, 140, 248, 0.08)',
+    border: '1px solid rgba(0, 0, 0, 0.3)',
+    boxShadow: '0px 0px 3px rgba(0, 0, 0, 0.2)'
+  };
+
   return (
     <header className="p-4 flex justify-between items-center border-b" style={headerStyles}>
       <div className="flex items-center space-x-4">
-        <h1 className="text-2xl font-bold font-heading" style={{ color: COLORS.primary }}>
-          1WIN Tracker Academy
-        </h1>
+        <div className="flex items-center gap-4">
+          <img 
+            src={logoSvg} 
+            alt="1WIN Logo" 
+            style={logoStyle}
+          />
+        </div>
       </div>
+      
       <div className="flex items-center space-x-4">
         {user && <SyncStatusIndicator />}
         <NotificationsPanel />

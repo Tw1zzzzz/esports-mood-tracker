@@ -7,6 +7,7 @@ interface UserDocument extends mongoose.Document {
   password: string;
   role: string;
   avatar?: string;
+  faceitAccountId?: mongoose.Types.ObjectId;
   matchPassword(enteredPassword: string): Promise<boolean>;
   completedTests?: boolean;
   completedBalanceWheel?: boolean;
@@ -46,6 +47,11 @@ const userSchema = new mongoose.Schema(
     avatar: {
       type: String,
       default: "",
+    },
+    faceitAccountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FaceitAccount',
+      default: null
     },
     completedTests: {
       type: Boolean,

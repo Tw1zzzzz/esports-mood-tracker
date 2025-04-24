@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,50 +7,88 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 
-const Profile = () => {
-  const { user, deleteAccount } = useAuth();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const navigate = useNavigate();
+/**
+ * Интерфейс состояния профиля
+ */
+interface ProfileState {
+  isDeleting: boolean;
+  isDialogOpen: boolean;
+}
 
-  const handleDeleteAccount = async () => {
-    setIsDeleting(true);
+/**
+ * Компонент страницы профиля пользователя
+ * Отображает данные профиля и предоставляет возможность удаления аккаунта
+ */
+const Profile: React.FC = () => {
+  const { user, deleteAccount } = useAuth();
+  const navigate = useNavigate();
+  
+  // Объединение связанных состояний в один объект
+  const [state, setState] = useState<ProfileState>({
+    isDeleting: false,
+    isDialogOpen: false
+  });
+
+  /**
+   * Обработчик для изменения состояния диалога
+   */
+  const handleDialogChange = (open: boolean): void => {
+    setState(prevState => ({ ...prevState, isDialogOpen: open }));
+  };
+
+  /**
+   * Обработчик удаления аккаунта пользователя
+   */
+  const handleDeleteAccount = async (): Promise<void> => {
+    // Устанавливаем состояние удаления
+    setState(prevState => ({ ...prevState, isDeleting: true }));
+    
     try {
       await deleteAccount();
+      // После успешного удаления перенаправляем на страницу входа
       navigate("/login");
     } catch (error) {
-      console.error("Failed to delete account:", error);
+      console.error("Ошибка при удалении аккаунта:", error);
     } finally {
-      setIsDeleting(false);
-      setIsDialogOpen(false);
+      // Сбрасываем состояния независимо от результата
+      setState({ isDeleting: false, isDialogOpen: false });
     }
   };
 
+  /**
+   * Компонент для неавторизованных пользователей
+   */
+  const UnauthenticatedView = () => (
+    <div className="flex items-center justify-center h-full">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Требуется авторизация</CardTitle>
+          <CardDescription>
+            Для доступа к профилю необходимо войти в систему
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button className="w-full" onClick={() => navigate("/login")}>
+            Войти
+          </Button>
+        </CardFooter>
+      </Card>
+    </div>
+  );
+
+  // Если пользователь не авторизован, показываем соответствующий компонент
   if (!user) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Требуется авторизация</CardTitle>
-            <CardDescription>
-              Для доступа к профилю необходимо войти в систему
-            </CardDescription>
-          </CardHeader>
-          <CardFooter>
-            <Button className="w-full" onClick={() => navigate("/login")}>
-              Войти
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
+    return <UnauthenticatedView />;
   }
+
+  const { isDeleting, isDialogOpen } = state;
 
   return (
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold mb-6">Профиль пользователя</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Карточка с информацией о профиле */}
         <Card>
           <CardHeader>
             <CardTitle>Информация о профиле</CardTitle>
@@ -76,7 +113,8 @@ const Profile = () => {
             </div>
           </CardContent>
           <CardFooter>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            {/* Диалог подтверждения удаления аккаунта */}
+            <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
               <DialogTrigger asChild>
                 <Button variant="destructive">Удалить аккаунт</Button>
               </DialogTrigger>
@@ -90,7 +128,7 @@ const Profile = () => {
                 <DialogFooter>
                   <Button
                     variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
+                    onClick={() => handleDialogChange(false)}
                   >
                     Отмена
                   </Button>
@@ -107,6 +145,7 @@ const Profile = () => {
           </CardFooter>
         </Card>
         
+        {/* Карточка со статистикой */}
         <Card>
           <CardHeader>
             <CardTitle>Статистика</CardTitle>
@@ -118,7 +157,7 @@ const Profile = () => {
             <div className="p-4 bg-muted rounded">
               <p className="text-sm">Эта секция будет содержать вашу персональную статистику.</p>
             </div>
-            {/* Additional statistics would go here */}
+            {/* Дополнительная статистика может быть добавлена здесь */}
           </CardContent>
         </Card>
       </div>

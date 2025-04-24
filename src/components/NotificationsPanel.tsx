@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -11,8 +11,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
-// Mock notifications - in a real app would come from an API/database
-const MOCK_NOTIFICATIONS = [
+interface Notification {
+  id: string;
+  title: string;
+  description: string;
+  date: Date;
+  read: boolean;
+}
+
+// Mock уведомления - в реальном приложении должны приходить с API/БД
+const MOCK_NOTIFICATIONS: Notification[] = [
   {
     id: "1",
     title: "Новый тест доступен",
@@ -36,41 +44,100 @@ const MOCK_NOTIFICATIONS = [
   }
 ];
 
-const NotificationsPanel = () => {
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
-  const [open, setOpen] = useState(false);
+/**
+ * Компонент панели уведомлений с выпадающим меню
+ */
+const NotificationsPanel: React.FC = () => {
+  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [open, setOpen] = useState<boolean>(false);
   
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(notification => !notification.read).length;
   
+  /**
+   * Обработчик для пометки всех уведомлений как прочитанных
+   */
   const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-  
-  const handleMarkAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    setNotifications(prevNotifications => 
+      prevNotifications.map(notification => ({ ...notification, read: true }))
     );
   };
   
-  const formatDate = (date: Date) => {
+  /**
+   * Обработчик для пометки одного уведомления как прочитанного
+   */
+  const handleMarkAsRead = (id: string) => {
+    setNotifications(prevNotifications => 
+      prevNotifications.map(notification => 
+        notification.id === id ? { ...notification, read: true } : notification
+      )
+    );
+  };
+  
+  /**
+   * Форматирование даты в локализованный формат
+   */
+  const formatDate = (date: Date): string => {
     return date.toLocaleDateString('ru-RU', {
       day: 'numeric',
       month: 'short',
     });
   };
   
+  /**
+   * Рендерит отдельное уведомление
+   */
+  const renderNotification = (notification: Notification) => (
+    <Card 
+      key={notification.id} 
+      className={`border-0 rounded-none ${!notification.read ? "bg-muted/10" : ""}`}
+    >
+      <CardContent 
+        className="p-4 hover:bg-muted/30 cursor-pointer"
+        onClick={() => handleMarkAsRead(notification.id)}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h4 className="font-medium text-sm">{notification.title}</h4>
+            <p className="text-sm text-muted-foreground mt-1">
+              {notification.description}
+            </p>
+          </div>
+          <Badge variant="outline" className="text-xs font-normal">
+            {formatDate(notification.date)}
+          </Badge>
+        </div>
+        
+        {!notification.read && (
+          <div className="mt-2 flex justify-end">
+            <div className="h-2 w-2 bg-primary rounded-full"></div>
+          </div>
+        )}
+      </CardContent>
+      <Separator />
+    </Card>
+  );
+  
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Уведомления">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="relative" 
+          aria-label="Уведомления"
+        >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center">
+            <Badge 
+              variant="destructive" 
+              className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center"
+            >
               {unreadCount}
             </Badge>
           )}
         </Button>
       </PopoverTrigger>
+      
       <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between p-4 bg-muted/20">
           <h3 className="font-medium">Уведомления</h3>
@@ -85,40 +152,13 @@ const NotificationsPanel = () => {
             </Button>
           )}
         </div>
+        
         <Separator />
+        
         <ScrollArea className="h-80">
           {notifications.length > 0 ? (
             <div>
-              {notifications.map((notification) => (
-                <Card 
-                  key={notification.id} 
-                  className={`border-0 rounded-none ${!notification.read ? "bg-muted/10" : ""}`}
-                >
-                  <CardContent 
-                    className="p-4 hover:bg-muted/30 cursor-pointer"
-                    onClick={() => handleMarkAsRead(notification.id)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-medium text-sm">{notification.title}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {notification.description}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {formatDate(notification.date)}
-                      </Badge>
-                    </div>
-                    
-                    {!notification.read && (
-                      <div className="mt-2 flex justify-end">
-                        <div className="h-2 w-2 bg-primary rounded-full"></div>
-                      </div>
-                    )}
-                  </CardContent>
-                  <Separator />
-                </Card>
-              ))}
+              {notifications.map(renderNotification)}
             </div>
           ) : (
             <div className="p-4 text-center text-muted-foreground">

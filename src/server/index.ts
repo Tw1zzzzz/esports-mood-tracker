@@ -1,6 +1,7 @@
 // Импортируем app из server.ts
 import app from './server';
 import mongoose from 'mongoose';
+import faceitSync from './services/faceitSync';
 
 // Определяем порт
 const PORT = process.env.PORT || 5000;
@@ -83,6 +84,9 @@ const startServer = async () => {
       console.log(`🔐 JWT секрет: ${process.env.JWT_SECRET ? 'настроен' : 'не настроен - используется значение по умолчанию'}`);
       console.log(`📡 Адрес API: http://localhost:${availablePort}/api`);
       console.log(`🩺 Адрес проверки состояния: http://localhost:${availablePort}/health`);
+      
+      // Инициализация задач синхронизации с Faceit
+      faceitSync.initFaceitSync();
     });
 
     // Обработка сигналов завершения

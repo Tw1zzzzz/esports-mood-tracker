@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Container, 
   Typography, 
@@ -6,369 +6,550 @@ import {
   Paper, 
   Box, 
   Avatar, 
-  LinearProgress, 
   Tabs, 
   Tab, 
   Card, 
   CardContent, 
-  CardHeader, 
-  Badge, 
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  CircularProgress,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   IconButton,
-  useTheme
+  useTheme,
+  SelectChangeEvent
 } from '@mui/material';
 import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  TrendingFlat as TrendingFlatIcon,
-  EmojiEvents as EmojiEventsIcon,
-  Star as StarIcon
+  Star as StarIcon,
+  Edit as EditIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { COLORS } from '../theme';
+import { useAuth } from '../hooks/useAuth';
+import axios from 'axios';
 
 interface Player {
   rank: number;
+  id: string;
   name: string;
+  avatar?: string;
   rating: number;
   gamePoints: number;
   nonGamePoints: number;
   discipline: number;
 }
 
-// Определение типов данных
-interface StatItem {
-  title: string;
-  value: string | number;
-  trend: number;
+interface Stats {
+  totalPlayers: number;
+  activePlayers: number;
+  averageRating: number;
+  monthlyTournaments: number;
 }
-
-interface PlayerRanking {
-  id: string;
-  name: string;
-  position: string;
-  avatar: string;
-  points: number;
-  achievements: string[];
-  progress: number;
-  trend: number;
-}
-
-// Тестовые данные, в реальном приложении должны быть получены с сервера
-const players: Player[] = [
-  { rank: 1, name: "Alexander 'Pro' Smith", rating: 2850, gamePoints: 890, nonGamePoints: 780, discipline: 95 },
-  { rank: 2, name: "Maria 'Queen' Johnson", rating: 2780, gamePoints: 840, nonGamePoints: 720, discipline: 90 },
-  { rank: 3, name: "Daniel 'Ace' Williams", rating: 2750, gamePoints: 820, nonGamePoints: 700, discipline: 85 },
-  { rank: 4, name: "Elena 'Star' Brown", rating: 2700, gamePoints: 780, nonGamePoints: 650, discipline: 88 },
-  { rank: 5, name: "Ivan 'Hunter' Petrov", rating: 2650, gamePoints: 760, nonGamePoints: 640, discipline: 82 },
-  { rank: 6, name: "Sophia 'Legend' Lee", rating: 2600, gamePoints: 730, nonGamePoints: 610, discipline: 87 },
-];
-
-// Тестовые данные для статистики
-const weekStats: StatItem[] = [
-  { title: "Активных игроков", value: 24, trend: 5 },
-  { title: "Среднее настроение", value: "7.8/10", trend: 2 },
-  { title: "Средняя энергия", value: "7.2/10", trend: -1 },
-  { title: "Тестов пройдено", value: 56, trend: 12 },
-];
-
-const monthStats: StatItem[] = [
-  { title: "Активных игроков", value: 32, trend: 8 },
-  { title: "Среднее настроение", value: "7.5/10", trend: 1 },
-  { title: "Средняя энергия", value: "7.0/10", trend: 0 },
-  { title: "Тестов пройдено", value: 128, trend: 15 },
-];
-
-const allTimeStats: StatItem[] = [
-  { title: "Всего игроков", value: 48, trend: 20 },
-  { title: "Среднее настроение", value: "7.4/10", trend: 5 },
-  { title: "Средняя энергия", value: "7.1/10", trend: 3 },
-  { title: "Тестов пройдено", value: 560, trend: 25 },
-];
-
-// Тестовые данные для игроков
-const generatePlayers = (): PlayerRanking[] => {
-  const positions = ["Нападающий", "Полузащитник", "Защитник", "Вратарь"];
-  const achievements = ["MVP", "Лучший бомбардир", "Лидер команды", "Железный игрок", "Прогресс месяца"];
-  
-  return Array.from({ length: 10 }, (_, i) => ({
-    id: `player-${i + 1}`,
-    name: `Игрок ${i + 1}`,
-    position: positions[Math.floor(Math.random() * positions.length)],
-    avatar: `https://i.pravatar.cc/150?img=${i + 10}`,
-    points: Math.floor(Math.random() * 500) + 500,
-    achievements: achievements.slice(0, Math.floor(Math.random() * 3) + 1),
-    progress: Math.floor(Math.random() * 100),
-    trend: Math.floor(Math.random() * 20) - 10,
-  })).sort((a, b) => b.points - a.points);
-};
-
-const weeklyPlayers = generatePlayers();
-const monthlyPlayers = generatePlayers();
-const allTimePlayers = generatePlayers();
 
 const TopPlayers: React.FC = () => {
-  const [period, setPeriod] = useState<'week' | 'month' | 'all'>('week');
+  const [period, setPeriod] = useState<'week' | 'month' | 'all'>('all');
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [stats, setStats] = useState<Stats>({
+    totalPlayers: 0,
+    activePlayers: 0,
+    averageRating: 0,
+    monthlyTournaments: 0
+  });
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [pointsForm, setPointsForm] = useState({
+    points: 0,
+    pointType: 'gamePoints',
+    operation: 'add'
+  });
+  const { user } = useAuth();
+  const isStaff = user?.role === 'staff';
   const theme = useTheme();
   
-  // Получение нужных данных на основе выбранного периода
-  const getStatsData = () => {
-    switch (period) {
-      case 'week': return weekStats;
-      case 'month': return monthStats;
-      case 'all': return allTimeStats;
-      default: return weekStats;
-    }
-  };
+  // URL бэкенда
+  const API_URL = import.meta.env.VITE_API_URL || '';
   
-  const getPlayersData = () => {
-    switch (period) {
-      case 'week': return weeklyPlayers;
-      case 'month': return monthlyPlayers;
-      case 'all': return allTimePlayers;
-      default: return weeklyPlayers;
-    }
-  };
+  // Загрузка данных игроков
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/api/player-rating/top?period=${period}`);
+        setPlayers(response.data.players);
+        setStats(response.data.stats);
+        setError(null);
+      } catch (err) {
+        console.error('Ошибка при загрузке данных:', err);
+        setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [period, API_URL]);
   
+  // Обработчик изменения периода
   const handleTabChange = (event: React.SyntheticEvent, newValue: 'week' | 'month' | 'all') => {
     setPeriod(newValue);
   };
   
+  // Обработчик открытия диалога редактирования
+  const handleOpenDialog = (player: Player) => {
+    setSelectedPlayer(player);
+    setPointsForm({
+      points: 0,
+      pointType: 'gamePoints',
+      operation: 'add'
+    });
+  };
+  
+  // Обработчик закрытия диалога
+  const handleCloseDialog = () => {
+    setSelectedPlayer(null);
+  };
+  
+  // Обработчик изменения текстового поля
+  const handleTextFieldChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setPointsForm(prev => ({ 
+      ...prev, 
+      [name]: name === 'points' ? parseInt(value) || 0 : value 
+    }));
+  };
+  
+  // Обработчик изменения селекторов
+  const handleSelectChange = (event: SelectChangeEvent) => {
+    const { name, value } = event.target;
+    setPointsForm(prev => ({ 
+      ...prev, 
+      [name]: value 
+    }));
+  };
+  
+  // Обработчик отправки формы
+  const handleSubmit = async () => {
+    if (!selectedPlayer) return;
+    
+    try {
+      setLoading(true);
+      await axios.put(
+        `${API_URL}/api/player-rating/${selectedPlayer.id}`,
+        pointsForm,
+        { 
+          headers: { 
+            Authorization: `Bearer ${localStorage.getItem('token')}` 
+          } 
+        }
+      );
+      
+      // Обновляем список игроков
+      const response = await axios.get(`${API_URL}/api/player-rating/top?period=${period}`);
+      setPlayers(response.data.players);
+      setStats(response.data.stats);
+      
+      handleCloseDialog();
+    } catch (err) {
+      console.error('Ошибка при обновлении рейтинга:', err);
+      setError('Не удалось обновить рейтинг. Пожалуйста, проверьте авторизацию и попробуйте еще раз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Обработчик сброса рейтинга игрока
+  const handleResetRating = async () => {
+    if (!selectedPlayer) return;
+    
+    if (!confirm(`Вы уверены, что хотите сбросить рейтинг игрока ${selectedPlayer.name}?`)) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await axios.post(
+        `${API_URL}/api/player-rating/${selectedPlayer.id}/reset`,
+        {},
+        { 
+          headers: { 
+            Authorization: `Bearer ${localStorage.getItem('token')}` 
+          } 
+        }
+      );
+      
+      // Обновляем список игроков
+      const response = await axios.get(`${API_URL}/api/player-rating/top?period=${period}`);
+      setPlayers(response.data.players);
+      setStats(response.data.stats);
+      
+      handleCloseDialog();
+    } catch (err) {
+      console.error('Ошибка при сбросе рейтинга:', err);
+      setError('Не удалось сбросить рейтинг. Пожалуйста, проверьте авторизацию и попробуйте еще раз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: 3, mb: 3 }}>
       <Box sx={{ 
-        p: 3, 
-        mb: 3, 
-        borderRadius: 2,
-        backgroundColor: COLORS.backgroundSecondary,
-        boxShadow: `0 4px 20px 0 ${COLORS.shadowColor}`
+        p: 2, 
+        borderRadius: 1,
+        backgroundColor: theme.palette.background.paper,
       }}>
-        <Typography variant="h4" component="h1" gutterBottom color={COLORS.textPrimary}>
-          Топ игроков
+        <Typography variant="h5" component="h1" gutterBottom color="text.primary">
+          Рейтинг игроков
         </Typography>
-        <Typography variant="body1" color={COLORS.textSecondary} sx={{ mb: 2 }}>
-          Рейтинг игроков по производительности, активности и достижениям
-        </Typography>
+        
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         
         <Tabs
           value={period}
           onChange={handleTabChange}
           indicatorColor="primary"
           textColor="primary"
-          sx={{
-            '& .MuiTabs-indicator': {
-              backgroundColor: COLORS.primary,
-            },
-            '& .MuiTab-root': {
-              color: COLORS.textSecondary,
-              '&.Mui-selected': {
-                color: COLORS.primary,
-              },
-            },
-            mb: 3
-          }}
+          sx={{ mb: 2, '& .MuiTab-root.Mui-selected': { color: '#3c83f6' }, '& .MuiTabs-indicator': { backgroundColor: '#3c83f6' } }}
         >
           <Tab label="Неделя" value="week" />
           <Tab label="Месяц" value="month" />
           <Tab label="Все время" value="all" />
         </Tabs>
         
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress size={32} />
+          </Box>
+        ) : (
+          <>
         {/* Карточки со статистикой */}
-        <StatsCards stats={getStatsData()} />
+            <StatsCards stats={stats} />
         
         {/* Таблица игроков */}
-        <PlayersTable players={getPlayersData()} />
+            <PlayersTable 
+              players={players} 
+              isStaff={isStaff} 
+              onEditClick={handleOpenDialog}
+            />
+          </>
+        )}
       </Box>
+      
+      {/* Диалог редактирования очков */}
+      {selectedPlayer && (
+        <Dialog open={!!selectedPlayer} onClose={handleCloseDialog}>
+          <DialogTitle>
+            Изменение рейтинга игрока: {selectedPlayer.name}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 1, minWidth: 400 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Количество очков"
+                name="points"
+                value={pointsForm.points}
+                onChange={handleTextFieldChange}
+                inputProps={{ min: 1 }}
+                margin="normal"
+              />
+              
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Тип очков</InputLabel>
+                <Select
+                  name="pointType"
+                  value={pointsForm.pointType}
+                  onChange={handleSelectChange}
+                  label="Тип очков"
+                >
+                  <MenuItem value="gamePoints">Игровые очки</MenuItem>
+                  <MenuItem value="nonGamePoints">Внеигровые очки</MenuItem>
+                  <MenuItem value="discipline">Дисциплина</MenuItem>
+                </Select>
+              </FormControl>
+              
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Операция</InputLabel>
+                <Select
+                  name="operation"
+                  value={pointsForm.operation}
+                  onChange={handleSelectChange}
+                  label="Операция"
+                >
+                  <MenuItem value="add">Добавить</MenuItem>
+                  <MenuItem value="subtract">Вычесть</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={handleResetRating} 
+              color="error" 
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              sx={{ marginRight: 'auto' }}
+            >
+              Сбросить рейтинг
+            </Button>
+            
+            <Button onClick={handleCloseDialog} color="inherit">
+              Отмена
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              variant="contained" 
+              color="primary"
+              disabled={!pointsForm.points}
+              sx={{ backgroundColor: '#3c83f6', '&:hover': { backgroundColor: '#2d6ad9' } }}
+            >
+              Сохранить
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Container>
   );
 };
 
 // Компонент для отображения карточек статистики
-const StatsCards: React.FC<{ stats: StatItem[] }> = ({ stats }) => {
+const StatsCards: React.FC<{ stats: Stats }> = ({ stats }) => {
   return (
-    <Grid container spacing={3} sx={{ mb: 4 }}>
-      {stats.map((stat, index) => (
-        <Grid item xs={12} sm={6} md={3} key={index}>
-          <Card sx={{ 
-            height: '100%',
-            backgroundColor: COLORS.cardBackground,
-            borderRadius: 2,
-            boxShadow: `0 4px 12px 0 ${COLORS.shadowColor}`,
-            transition: 'transform 0.3s, box-shadow 0.3s',
-            '&:hover': {
-              transform: 'translateY(-5px)',
-              boxShadow: `0 8px 24px 0 ${COLORS.shadowColor}`,
-            }
-          }}>
-            <CardContent>
-              <Typography variant="h6" component="div" color={COLORS.textPrimary} gutterBottom>
-                {stat.title}
+    <Grid container spacing={2} sx={{ mb: 2 }}>
+      <Grid item xs={6} sm={3}>
+        <Card variant="outlined" sx={{ height: '100%' }}>
+          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Всего игроков
+            </Typography>
+            <Typography variant="h6" component="div" color="primary" sx={{ color: '#3c83f6' }}>
+              {stats.totalPlayers}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+      
+      <Grid item xs={6} sm={3}>
+        <Card variant="outlined" sx={{ height: '100%' }}>
+          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Активных
+            </Typography>
+            <Typography variant="h6" component="div" color="primary" sx={{ color: '#3c83f6' }}>
+              {stats.activePlayers}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+      
+      <Grid item xs={6} sm={3}>
+        <Card variant="outlined" sx={{ height: '100%' }}>
+          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Средний рейтинг
+            </Typography>
+            <Typography variant="h6" component="div" color="primary" sx={{ color: '#3c83f6' }}>
+              {stats.averageRating}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="h4" component="div" color={COLORS.primary} fontWeight="bold">
-                  {stat.value}
+          </CardContent>
+        </Card>
+      </Grid>
+      
+      <Grid item xs={6} sm={3}>
+        <Card variant="outlined" sx={{ height: '100%' }}>
+          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Турниров
                 </Typography>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  color: stat.trend > 0 ? COLORS.success : stat.trend < 0 ? COLORS.error : COLORS.textSecondary
-                }}>
-                  {stat.trend > 0 ? (
-                    <TrendingUpIcon fontSize="small" />
-                  ) : stat.trend < 0 ? (
-                    <TrendingDownIcon fontSize="small" />
-                  ) : (
-                    <TrendingFlatIcon fontSize="small" />
-                  )}
-                  <Typography variant="body2" component="span" sx={{ ml: 0.5 }}>
-                    {Math.abs(stat.trend)}%
+            <Typography variant="h6" component="div" color="primary" sx={{ color: '#3c83f6' }}>
+              {stats.monthlyTournaments}
                   </Typography>
-                </Box>
-              </Box>
             </CardContent>
           </Card>
         </Grid>
-      ))}
     </Grid>
   );
 };
 
 // Компонент для отображения таблицы игроков
-const PlayersTable: React.FC<{ players: PlayerRanking[] }> = ({ players }) => {
+interface PlayersTableProps {
+  players: Player[];
+  isStaff: boolean;
+  onEditClick: (player: Player) => void;
+}
+
+const PlayersTable: React.FC<PlayersTableProps> = ({ players, isStaff, onEditClick }) => {
   return (
-    <Paper sx={{ 
-      p: 0, 
-      overflow: 'hidden',
-      backgroundColor: COLORS.cardBackground,
-      borderRadius: 2,
-      boxShadow: `0 4px 12px 0 ${COLORS.shadowColor}`,
+    <TableContainer component={Paper} variant="outlined" sx={{ 
+      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+      borderRadius: '12px',
+      overflow: 'hidden'
     }}>
-      <Box sx={{ p: 3, borderBottom: `1px solid ${COLORS.divider}` }}>
-        <Typography variant="h5" component="h2" color={COLORS.textPrimary}>
-          Рейтинг игроков
-        </Typography>
-      </Box>
-      
-      {players.map((player, index) => (
-        <Box 
-          key={player.id}
-          sx={{ 
-            p: 2, 
-            display: 'flex', 
-            alignItems: 'center',
-            borderBottom: index !== players.length - 1 ? `1px solid ${COLORS.divider}` : 'none',
-            '&:hover': {
-              backgroundColor: COLORS.hoverBackground,
-            }
-          }}
-        >
-          <Typography 
-            variant="h5" 
-            sx={{ 
-              minWidth: 40, 
-              fontWeight: 'bold',
-              color: index < 3 ? COLORS.primary : COLORS.textSecondary
-            }}
-          >
-            #{index + 1}
-          </Typography>
-          
-          <Avatar 
-            src={player.avatar} 
-            alt={player.name}
-            sx={{ 
-              width: 50, 
-              height: 50, 
-              border: index < 3 ? `2px solid ${COLORS.primary}` : 'none',
-              ml: 1
-            }}
-          />
-          
-          <Box sx={{ ml: 2, flex: 1 }}>
-            <Typography variant="h6" color={COLORS.textPrimary}>
-              {player.name}
-            </Typography>
-            <Typography variant="body2" color={COLORS.textSecondary}>
-              {player.position}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3 }}>
-            <StarIcon sx={{ color: COLORS.gold, mr: 1 }} />
-            <Typography variant="h6" color={COLORS.textPrimary} fontWeight="bold">
-              {player.points}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', maxWidth: 200, mr: 3 }}>
-            {player.achievements.map((achievement, i) => (
-              <Badge 
-                key={i} 
+      <Table size="medium" sx={{ '& .MuiTableCell-root': { py: 2, px: 2.5 } }}>
+        <TableHead>
+          <TableRow sx={{ backgroundColor: '#3c83f6', color: 'white' }}>
+            <TableCell width="60px" sx={{ color: 'white', fontWeight: 'bold' }}>Ранг</TableCell>
+            <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Игрок</TableCell>
+            <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Рейтинг</TableCell>
+            <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Игровые очки</TableCell>
+            <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Внеигровые</TableCell>
+            <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Дисциплина</TableCell>
+            {isStaff && <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Действия</TableCell>}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {players.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={isStaff ? 7 : 6} align="center">
+                Нет данных для отображения
+              </TableCell>
+            </TableRow>
+          ) : (
+            players.map((player) => (
+              <TableRow 
+                key={player.id}
                 sx={{ 
-                  m: 0.5, 
-                  py: 0.5, 
-                  px: 1, 
-                  borderRadius: 1,
-                  backgroundColor: COLORS.backgroundAccent,
-                  color: COLORS.textPrimary,
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontSize: '0.75rem',
+                  backgroundColor: player.rank === 1 ? 'rgba(255, 215, 0, 0.05)' :
+                                   player.rank === 2 ? 'rgba(192, 192, 192, 0.05)' :
+                                   player.rank === 3 ? 'rgba(205, 127, 50, 0.05)' :
+                                   'transparent',
+                  '&:nth-of-type(odd)': { 
+                    backgroundColor: player.rank <= 3 ? 
+                      'inherit' : 'rgba(60, 131, 246, 0.03)'
+                  },
+                  '&:last-child td, &:last-child th': { border: 0 },
+                  '&:hover': { 
+                    backgroundColor: 'rgba(60, 131, 246, 0.08)',
+                    transition: 'background-color 0.2s ease'
+                  },
+                  transition: 'background-color 0.2s ease',
+                  cursor: isStaff ? 'pointer' : 'default',
+                  borderBottom: '1px solid rgba(224, 224, 224, 0.5)'
                 }}
+                onClick={isStaff ? () => onEditClick(player) : undefined}
               >
-                <EmojiEventsIcon sx={{ fontSize: 14, mr: 0.5, color: COLORS.gold }} />
-                {achievement}
-              </Badge>
-            ))}
-          </Box>
-          
-          <Box sx={{ width: 180 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography variant="body2" color={COLORS.textSecondary}>
-                Прогресс
-              </Typography>
-              <Typography variant="body2" color={COLORS.textSecondary}>
-                {player.progress}%
-              </Typography>
-            </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={player.progress}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: COLORS.progressBackground,
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: COLORS.primary,
-                  borderRadius: 4,
-                }
-              }}
-            />
-          </Box>
-          
-          <Box 
-            sx={{ 
-              ml: 3, 
-              display: 'flex', 
-              alignItems: 'center',
-              color: player.trend > 0 ? COLORS.success : player.trend < 0 ? COLORS.error : COLORS.textSecondary
-            }}
-          >
-            {player.trend > 0 ? (
-              <TrendingUpIcon />
-            ) : player.trend < 0 ? (
-              <TrendingDownIcon />
-            ) : (
-              <TrendingFlatIcon />
-            )}
-            <Typography 
-              variant="body1" 
-              sx={{ ml: 0.5 }}
-            >
-              {Math.abs(player.trend)}%
-            </Typography>
-          </Box>
-        </Box>
-      ))}
-    </Paper>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {player.rank === 1 && <StarIcon fontSize="small" sx={{ color: 'gold', mr: 0.5 }} />}
+                    <Typography variant="body1" component="span" sx={{
+                      fontWeight: player.rank <= 3 ? 'bold' : 'normal',
+                      color: player.rank === 1 ? 'gold' : 
+                             player.rank === 2 ? 'silver' : 
+                             player.rank === 3 ? '#cd7f32' : 'inherit'
+                    }}>
+                      {player.rank}
+                    </Typography>
+                  </Box>
+                </TableCell>
+                
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Avatar 
+                      src={player.avatar} 
+                      alt={player.name}
+                      sx={{ 
+                        width: 40, 
+                        height: 40, 
+                        mr: 1.5,
+                        fontSize: '1rem',
+                        border: player.rank <= 3 ? 
+                          `2px solid ${player.rank === 1 ? 'gold' : player.rank === 2 ? 'silver' : '#cd7f32'}` : 'none'
+                      }}
+                    >
+                      {!player.avatar && player.name.charAt(0)}
+                    </Avatar>
+                    <Typography variant="body1" sx={{ 
+                      fontWeight: player.rank <= 3 ? 500 : 'normal'
+                    }}>
+                      {player.name}
+                    </Typography>
+                  </Box>
+                </TableCell>
+                
+                <TableCell align="right">
+                  <Typography variant="body1" fontWeight="bold" sx={{ 
+                    color: '#3c83f6',
+                    fontSize: player.rank <= 3 ? '1.1rem' : '1rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end'
+                  }}>
+                    {player.rating}
+                  </Typography>
+                </TableCell>
+                
+                <TableCell align="right">
+                  <Typography variant="body1" sx={{
+                    color: player.gamePoints > 500 ? '#3c83f6' : 'inherit',
+                    fontWeight: player.gamePoints > 500 ? 500 : 'normal'
+                  }}>
+                    {player.gamePoints}
+                  </Typography>
+                </TableCell>
+                
+                <TableCell align="right">
+                  <Typography variant="body1" sx={{
+                    color: player.nonGamePoints > 500 ? '#3c83f6' : 'inherit',
+                    fontWeight: player.nonGamePoints > 500 ? 500 : 'normal'
+                  }}>
+                    {player.nonGamePoints}
+                  </Typography>
+                </TableCell>
+                
+                <TableCell align="right">
+                  <Typography variant="body1" sx={{
+                    color: player.discipline > 80 ? 'green' : player.discipline < 50 ? '#ff5252' : 'inherit',
+                    fontWeight: player.discipline > 80 ? 500 : 'normal'
+                  }}>
+                    {player.discipline}
+                  </Typography>
+                </TableCell>
+                
+                {isStaff && (
+                  <TableCell align="right">
+                    <IconButton 
+                      size="medium" 
+                      color="primary" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditClick(player);
+                      }}
+                      aria-label="изменить"
+                      sx={{ 
+                        color: '#3c83f6',
+                        '&:hover': {
+                          backgroundColor: 'rgba(60, 131, 246, 0.1)'
+                        }
+                      }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 };
 

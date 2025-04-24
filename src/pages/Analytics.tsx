@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import axios from 'axios';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 // Импортируем функции API и тему
-import { getAllPlayersMoodStats, getAllPlayersTestStats, getAllPlayersBalanceWheelStats } from '@/lib/api';
+import { getAnalyticsMoodStats, getAnalyticsTestStats, getAnalyticsBalanceWheelStats } from '@/lib/api';
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 
 interface PlayerStats {
@@ -114,24 +115,28 @@ const Analytics: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isPlayerRole = user?.role === 'player';
 
   // Получение данных при монтировании компонента
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Загрузка статистики настроения игроков
-        const moodResponse = await getAllPlayersMoodStats();
+        // Загрузка статистики настроения с использованием новых API
+        const moodResponse = await getAnalyticsMoodStats();
         setMoodStatsData(moodResponse.data);
         
-        // Загрузка статистики тестов игроков
-        const testsResponse = await getAllPlayersTestStats();
+        // Загрузка статистики тестов с использованием новых API
+        const testsResponse = await getAnalyticsTestStats();
         setTestStatsData(testsResponse.data);
         
-        // Загрузка данных колес баланса игроков
-        const balanceWheelResponse = await getAllPlayersBalanceWheelStats();
+        // Загрузка данных колес баланса с использованием новых API
+        const balanceWheelResponse = await getAnalyticsBalanceWheelStats();
         setBalanceWheelStatsData(balanceWheelResponse.data);
         
+        // Проверяем, есть ли данные и формируем статистику соответственно
+        if (moodResponse.data && moodResponse.data.length > 0) {
         // Создание реальных данных о команде из данных настроения и тестов
         const realTeamStats: TeamStats = {
           totalWins: testsResponse.data.reduce((total: number, player: any) => total + (player.testCount || 0), 0),
@@ -157,6 +162,15 @@ const Analytics: React.FC = () => {
         // Создание данных игроков из данных настроения и тестов
         const realPlayers = moodResponse.data.map((player: any, index: number) => {
           const testData = testsResponse.data.find((test: any) => test.userId === player.userId) || { testCount: 0 };
+            
+            // Если игрок и есть данные для графика, используем их
+            let winRateHistory = generatePlayerWinRateHistory();
+            if (isPlayerRole && player.chartData) {
+              winRateHistory = player.chartData.map((item: any) => ({
+                date: item.date,
+                value: item.mood // Используем настроение как показатель "успешности"
+              }));
+            }
           
           return {
             id: index + 1,
@@ -168,11 +182,35 @@ const Analytics: React.FC = () => {
             accuracy: Math.floor(Math.random() * 20) + 40,
             winRate: testData.testCount > 0 ? Math.floor(Math.random() * 20) + 40 : 0,
             hltvRating: parseFloat((Math.random() * 0.5 + 0.8).toFixed(2)),
-            winRateHistory: generatePlayerWinRateHistory()
+              winRateHistory
           };
         });
         
         setPlayers(realPlayers);
+        } else {
+          // Если данных нет, используем заглушки
+          setTeamStats({
+            totalWins: 0,
+            winRate: 0,
+            longestWinStreak: 0,
+            recentResults: '',
+            kdRatio: 0,
+            headshotPercentage: 0,
+            hltvRanking: 0,
+            hltvPoints: 0,
+            mainRoster: ['Нет данных'],
+            practiceStats: {
+              totalWins: 0,
+              winRate: 0,
+              kdRatio: 0,
+              headshotPercentage: 0
+            },
+            winRateHistory: []
+          });
+          
+          setPlayers([]);
+        }
+        
         setLoading(false);
       } catch (err: any) {
         console.error('Error fetching analytics data:', err);
@@ -187,7 +225,7 @@ const Analytics: React.FC = () => {
     };
     
     fetchData();
-  }, []);
+  }, [isPlayerRole]);
   
   // Вспомогательные функции для генерации данных
   const calculateAverageWinRate = (testData: any[]): number => {

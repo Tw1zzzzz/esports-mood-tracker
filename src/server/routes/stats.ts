@@ -106,6 +106,84 @@ router.get('/players/mood', protect, isStaff, async (_req: any, res) => {
   }
 });
 
+// Для сотрудников: получить данные активности игрока за указанный период
+router.get('/players/:playerId/activity', protect, isStaff, async (req: any, res) => {
+  try {
+    const { playerId } = req.params;
+    const days = parseInt(req.query.days) || 14; // По умолчанию 14 дней
+    
+    console.log(`Fetching activity data for player: ${playerId}, days: ${days} (staff only)`);
+    
+    // Проверяем валидность ID
+    if (!playerId || playerId === 'undefined' || playerId === 'null') {
+      console.error(`Invalid player ID received for activity data: ${playerId}`);
+      return res.status(400).json({ message: 'Invalid player ID' });
+    }
+    
+    // Рассчитываем диапазон дат
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+    
+    try {
+      // Извлекаем ID игрока из параметра
+      // Проверяем, если playerId содержит объект игрока, как в URL из логов ошибок
+      let actualPlayerId = playerId;
+      
+      // Если playerId содержит JSON-строку с объектом игрока
+      if (playerId.includes('_id:') || playerId.includes('ObjectId')) {
+        try {
+          // Извлечение ID из строки
+          const matches = playerId.match(/ObjectId\(['"]([0-9a-fA-F]{24})['"]\)/);
+          if (matches && matches[1]) {
+            actualPlayerId = matches[1];
+            console.log(`Extracted player ID from object string: ${actualPlayerId}`);
+          } else {
+            console.error(`Failed to extract player ID from object string: ${playerId}`);
+            return res.status(400).json({ message: 'Invalid player ID format in object string' });
+          }
+        } catch (parseError) {
+          console.error(`Error parsing player ID from object string: ${playerId}`, parseError);
+          return res.status(400).json({ message: 'Invalid player ID format in object string' });
+        }
+      }
+      
+      // Проверка на валидный ObjectId для MongoDB
+      if (!/^[0-9a-fA-F]{24}$/.test(actualPlayerId)) {
+        console.error(`Invalid MongoDB ObjectId format for activity data: ${actualPlayerId}`);
+        return res.status(400).json({ message: 'Invalid player ID format' });
+      }
+      
+      // Получаем все записи о настроении игрока за указанный период
+      const moodEntries = await MoodEntry.find({ 
+        userId: actualPlayerId,
+        date: { $gte: startDate, $lte: endDate }
+      }).sort({ date: 1 });
+      
+      console.log(`Found ${moodEntries.length} activity entries for player ${actualPlayerId} in the last ${days} days`);
+      
+      // Преобразуем записи в формат для графика активности
+      const activityData = moodEntries.map(entry => ({
+        date: entry.date,
+        timeOfDay: entry.timeOfDay,
+        mood: entry.mood,
+        energy: entry.energy
+      }));
+      
+      return res.json(activityData);
+    } catch (dbError) {
+      console.error(`Database error when processing activity data for player ${playerId}:`, dbError);
+      return res.status(500).json({ message: 'Database error when processing activity data' });
+    }
+  } catch (error) {
+    console.error('Error fetching player activity data:', error);
+    return res.status(500).json({ 
+      message: 'Error fetching player activity data',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Для сотрудников: получить статистику тестов всех игроков
 router.get('/players/tests', protect, isStaff, async (_req: any, res) => {
   try {
@@ -358,6 +436,296 @@ router.get('/team/mood/chart', protect, isStaff, async (_req: any, res) => {
   } catch (error) {
     console.error('Error fetching team mood chart data:', error);
     return res.status(500).json({ message: 'Error fetching team mood chart data' });
+  }
+});
+
+// Для всех пользователей: получить данные статистики настроения для аналитики
+router.get('/analytics/mood', protect, async (req: any, res) => {
+  try {
+    console.log('Fetching analytics mood data for user:', req.user._id);
+    
+    if (req.user.role === 'staff') {
+      // Для персонала: получаем данные всех игроков
+      const allMoodEntries = await MoodEntry.find().populate('userId', 'name email');
+      console.log(`Found ${allMoodEntries.length} total mood entries for staff analytics`);
+      
+      // Группируем записи по пользователям и вычисляем средние значения
+      const userMoodMap = new Map();
+      
+      allMoodEntries.forEach(entry => {
+        if (!entry.userId) return;
+        
+        const userId = entry.userId.toString();
+        const userName = (entry.userId as any).name || 'Неизвестный игрок';
+        
+        if (!userMoodMap.has(userId)) {
+          userMoodMap.set(userId, {
+            userId,
+            name: userName,
+            moodValues: [],
+            energyValues: [],
+            lastActivity: null
+          });
+        }
+        
+        const userData = userMoodMap.get(userId);
+        userData.moodValues.push(entry.mood);
+        userData.energyValues.push(entry.energy);
+        
+        // Обновляем дату последней активности
+        const entryDate = new Date(entry.date);
+        if (!userData.lastActivity || entryDate > userData.lastActivity) {
+          userData.lastActivity = entryDate;
+        }
+      });
+      
+      // Преобразуем Map в массив и вычисляем средние значения
+      const result = Array.from(userMoodMap.values()).map(userData => {
+        const moodSum = userData.moodValues.reduce((sum: number, val: number): number => sum + val, 0);
+        const energySum = userData.energyValues.reduce((sum: number, val: number): number => sum + val, 0);
+        
+        return {
+          userId: userData.userId,
+          name: userData.name,
+          mood: userData.moodValues.length > 0 
+            ? parseFloat((moodSum / userData.moodValues.length).toFixed(1)) 
+            : 0,
+          energy: userData.energyValues.length > 0 
+            ? parseFloat((energySum / userData.energyValues.length).toFixed(1)) 
+            : 0,
+          entries: userData.moodValues.length,
+          lastActivity: userData.lastActivity
+        };
+      });
+      
+      console.log(`Processed mood stats for ${result.length} players for staff analytics`);
+      return res.json(result);
+    } else {
+      // Для игроков: получаем только их собственные данные
+      const userMoodEntries = await MoodEntry.find({ userId: req.user._id }).sort({ date: -1 });
+      console.log(`Found ${userMoodEntries.length} mood entries for player analytics (${req.user._id})`);
+      
+      // Готовим данные для игрока
+      if (userMoodEntries.length === 0) {
+        return res.json([]);
+      }
+      
+      // Группируем записи по дате для создания временных рядов
+      const entriesByDate = new Map();
+      
+      userMoodEntries.forEach(entry => {
+        const date = new Date(entry.date);
+        // Создаем ключ в формате YYYY-MM-DD для группировки
+        const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        
+        if (!entriesByDate.has(dateKey)) {
+          entriesByDate.set(dateKey, {
+            date: dateKey,
+            moodValues: [],
+            energyValues: [],
+            entries: 0
+          });
+        }
+        
+        const dateData = entriesByDate.get(dateKey);
+        dateData.moodValues.push(entry.mood);
+        dateData.energyValues.push(entry.energy);
+        dateData.entries += 1;
+      });
+      
+      // Преобразуем Map в массив и вычисляем средние значения
+      const chartData = Array.from(entriesByDate.values()).map(dateData => {
+        const moodSum = dateData.moodValues.reduce((sum: number, val: number) => sum + val, 0);
+        const energySum = dateData.energyValues.reduce((sum: number, val: number) => sum + val, 0);
+        
+        return {
+          date: dateData.date,
+          mood: parseFloat((moodSum / dateData.moodValues.length).toFixed(1)),
+          energy: parseFloat((energySum / dateData.energyValues.length).toFixed(1)),
+          entries: dateData.entries
+        };
+      });
+      
+      // Сортируем по дате от старых к новым
+      chartData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Формируем результат для игрока - в том же формате, что и для персонала
+      const result = [{
+        userId: req.user._id,
+        name: req.user.name,
+        mood: chartData.length > 0 
+          ? chartData.reduce((sum, item) => sum + item.mood, 0) / chartData.length
+          : 0,
+        energy: chartData.length > 0 
+          ? chartData.reduce((sum, item) => sum + item.energy, 0) / chartData.length
+          : 0,
+        entries: userMoodEntries.length,
+        lastActivity: userMoodEntries[0]?.date || null,
+        chartData // Добавляем данные для графика
+      }];
+      
+      console.log(`Processed mood stats for player analytics (${req.user._id})`);
+      return res.json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching analytics mood data:', error);
+    return res.status(500).json({ message: 'Error fetching analytics mood data' });
+  }
+});
+
+// Для всех пользователей: получить данные статистики тестов для аналитики
+router.get('/analytics/tests', protect, async (req: any, res) => {
+  try {
+    console.log('Fetching analytics test data for user:', req.user._id);
+    
+    if (req.user.role === 'staff') {
+      // Для персонала: получаем данные всех игроков
+      const allTestEntries = await TestEntry.find().populate('userId', 'name email');
+      console.log(`Found ${allTestEntries.length} total test entries for staff analytics`);
+      
+      // Группируем записи по пользователям
+      const userTestMap = new Map();
+      
+      allTestEntries.forEach(entry => {
+        if (!entry.userId) return;
+        
+        const userId = entry.userId.toString();
+        const userName = (entry.userId as any).name || 'Неизвестный игрок';
+        
+        if (!userTestMap.has(userId)) {
+          userTestMap.set(userId, {
+            userId,
+            name: userName,
+            tests: [],
+            lastTest: null
+          });
+        }
+        
+        const userData = userTestMap.get(userId);
+        userData.tests.push(entry);
+        
+        // Обновляем дату последнего теста
+        const entryDate = new Date(entry.date);
+        if (!userData.lastTest || entryDate > userData.lastTest) {
+          userData.lastTest = entryDate;
+        }
+      });
+      
+      // Преобразуем Map в массив
+      const result = Array.from(userTestMap.values()).map(userData => {
+        return {
+          userId: userData.userId,
+          name: userData.name,
+          testCount: userData.tests.length,
+          lastTest: userData.lastTest
+        };
+      });
+      
+      console.log(`Processed test stats for ${result.length} players for staff analytics`);
+      return res.json(result);
+    } else {
+      // Для игроков: получаем только их собственные данные
+      const userTestEntries = await TestEntry.find({ userId: req.user._id }).sort({ date: -1 });
+      console.log(`Found ${userTestEntries.length} test entries for player analytics (${req.user._id})`);
+      
+      // Формируем результат для игрока - в том же формате, что и для персонала
+      const result = [{
+        userId: req.user._id,
+        name: req.user.name,
+        testCount: userTestEntries.length,
+        lastTest: userTestEntries[0]?.date || null,
+        tests: userTestEntries // Добавляем полные данные о тестах
+      }];
+      
+      console.log(`Processed test stats for player analytics (${req.user._id})`);
+      return res.json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching analytics test data:', error);
+    return res.status(500).json({ message: 'Error fetching analytics test data' });
+  }
+});
+
+// Для всех пользователей: получить данные статистики колеса баланса для аналитики
+router.get('/analytics/balance-wheel', protect, async (req: any, res) => {
+  try {
+    console.log('Fetching analytics balance wheel data for user:', req.user._id);
+    
+    if (req.user.role === 'staff') {
+      // Для персонала: получаем данные всех игроков
+      const allWheels = await BalanceWheel.find()
+        .populate('userId', 'name email')
+        .sort({ date: -1 });
+        
+      console.log(`Found ${allWheels.length} total balance wheel entries for staff analytics`);
+      
+      // Группируем по пользователям
+      const wheelsByUser = new Map();
+      allWheels.forEach(wheel => {
+        if (!wheel.userId) return;
+        
+        const userId = wheel.userId.toString();
+        const userName = (wheel.userId as any).name || 'Неизвестный игрок';
+        
+        if (!wheelsByUser.has(userId)) {
+          wheelsByUser.set(userId, {
+            userId,
+            name: userName,
+            wheels: []
+          });
+        }
+        
+        wheelsByUser.get(userId).wheels.push({
+          id: wheel._id,
+          date: wheel.date,
+          physical: wheel.physical,
+          emotional: wheel.emotional,
+          intellectual: wheel.intellectual,
+          spiritual: wheel.spiritual,
+          occupational: wheel.occupational,
+          social: wheel.social,
+          environmental: wheel.environmental,
+          financial: wheel.financial
+        });
+      });
+      
+      // Преобразуем Map в массив
+      const result = Array.from(wheelsByUser.values());
+      
+      console.log(`Processed balance wheel stats for ${result.length} players for staff analytics`);
+      return res.json(result);
+    } else {
+      // Для игроков: получаем только их собственные данные
+      const userWheels = await BalanceWheel.find({ userId: req.user._id }).sort({ date: -1 });
+      console.log(`Found ${userWheels.length} balance wheel entries for player analytics (${req.user._id})`);
+      
+      // Преобразуем данные
+      const wheels = userWheels.map(wheel => ({
+        id: wheel._id,
+        date: wheel.date,
+        physical: wheel.physical,
+        emotional: wheel.emotional,
+        intellectual: wheel.intellectual,
+        spiritual: wheel.spiritual,
+        occupational: wheel.occupational,
+        social: wheel.social,
+        environmental: wheel.environmental,
+        financial: wheel.financial
+      }));
+      
+      // Формируем результат для игрока - в том же формате, что и для персонала
+      const result = [{
+        userId: req.user._id,
+        name: req.user.name,
+        wheels
+      }];
+      
+      console.log(`Processed balance wheel stats for player analytics (${req.user._id})`);
+      return res.json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching analytics balance wheel data:', error);
+    return res.status(500).json({ message: 'Error fetching analytics balance wheel data' });
   }
 });
 

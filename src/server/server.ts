@@ -12,6 +12,10 @@ import moodRoutes from './routes/mood';
 import testsRoutes from './routes/tests';
 import statsRoutes from './routes/stats';
 import healthRoutes from './health';
+import faceitRoutes from './routes/faceitRoutes';
+import analyticsRoutes from './routes/analyticsRoutes';
+import playerRatingRoutes from './routes/playerRating';
+import fileStorageRoutes from './routes/fileStorage';
 
 // Загрузка переменных окружения
 dotenv.config();
@@ -66,7 +70,14 @@ app.use('/api/balance-wheel', balanceWheelRoutes);
 app.use('/api/mood', moodRoutes);
 app.use('/api/tests', testsRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/faceit', faceitRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/player-rating', playerRatingRoutes);
+app.use('/api/files', fileStorageRoutes);
 app.use('/health', healthRoutes);
+
+// Создаем путь для статических загрузок
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 // Обработка ошибки 404 для маршрутов API
 app.use('/api/*', (req, res) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,24 +8,74 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "react-hot-toast";
 
-const Register = () => {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"player" | "staff">("player");
-  const [isLoading, setIsLoading] = useState(false);
+/**
+ * Тип роли пользователя
+ */
+type UserRole = "player" | "staff";
+
+/**
+ * Интерфейс состояния формы регистрации
+ */
+interface RegisterFormState {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  isLoading: boolean;
+}
+
+/**
+ * Компонент страницы регистрации пользователя
+ */
+const Register: React.FC = () => {
+  // Состояние формы в одном объекте для удобства управления
+  const [formState, setFormState] = useState<RegisterFormState>({
+    name: "",
+    email: "",
+    password: "",
+    role: "player",
+    isLoading: false
+  });
+  
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  /**
+   * Обновление текстового поля формы
+   */
+  const updateFormField = (field: keyof Omit<RegisterFormState, 'isLoading' | 'role'>, value: string): void => {
+    setFormState(prevState => ({
+      ...prevState,
+      [field]: value
+    }));
+  };
+
+  /**
+   * Обновление поля роли пользователя
+   */
+  const updateRole = (value: UserRole): void => {
+    setFormState(prevState => ({
+      ...prevState,
+      role: value
+    }));
+  };
+
+  /**
+   * Обработчик отправки формы регистрации
+   */
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    if (!name || !email || !password) {
+    const { name, email, password, role } = formState;
+    
+    // Валидация полей перед отправкой
+    if (!name.trim() || !email.trim() || !password) {
       toast.error("Пожалуйста, заполните все поля");
       return;
     }
     
-    setIsLoading(true);
+    // Устанавливаем состояние загрузки
+    setFormState(prevState => ({ ...prevState, isLoading: true }));
     
     try {
       const result = await register(name, email, password, role);
@@ -40,9 +90,12 @@ const Register = () => {
       console.error("Ошибка при регистрации:", error);
       toast.error("Не удалось создать аккаунт. Пожалуйста, попробуйте позже.");
     } finally {
-      setIsLoading(false);
+      // Сбрасываем состояние загрузки независимо от результата
+      setFormState(prevState => ({ ...prevState, isLoading: false }));
     }
   };
+
+  const { name, email, password, role, isLoading } = formState;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -53,6 +106,7 @@ const Register = () => {
             Создайте новый аккаунт
           </CardDescription>
         </CardHeader>
+        
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -60,10 +114,13 @@ const Register = () => {
               <Input
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => updateFormField('name', e.target.value)}
                 required
+                autoComplete="name"
+                disabled={isLoading}
               />
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -71,23 +128,34 @@ const Register = () => {
                 type="email"
                 placeholder="email@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => updateFormField('email', e.target.value)}
                 required
+                autoComplete="email"
+                disabled={isLoading}
               />
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="password">Пароль</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => updateFormField('password', e.target.value)}
                 required
+                autoComplete="new-password"
+                disabled={isLoading}
               />
             </div>
+            
             <div className="space-y-2">
               <Label>Роль</Label>
-              <RadioGroup defaultValue="player" value={role} onValueChange={(value) => setRole(value as "player" | "staff")}>
+              <RadioGroup 
+                defaultValue="player" 
+                value={role} 
+                onValueChange={(value) => updateRole(value as UserRole)}
+                disabled={isLoading}
+              >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="player" id="player" />
                   <Label htmlFor="player">Игрок</Label>
@@ -99,10 +167,16 @@ const Register = () => {
               </RadioGroup>
             </div>
           </CardContent>
+          
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isLoading}
+            >
               {isLoading ? "Загрузка..." : "Зарегистрироваться"}
             </Button>
+            
             <div className="text-center text-sm">
               Уже есть аккаунт?{" "}
               <Link to="/login" className="text-blue-600 hover:underline">

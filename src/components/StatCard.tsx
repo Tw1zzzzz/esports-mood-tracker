@@ -14,6 +14,10 @@ export interface StatCardProps {
   style?: React.CSSProperties;
 }
 
+/**
+ * Компонент для отображения статистической карточки с опциональным
+ * индикатором тренда и дополнительным описанием
+ */
 export const StatCard: React.FC<StatCardProps> = ({ 
   title, 
   value, 
@@ -22,26 +26,35 @@ export const StatCard: React.FC<StatCardProps> = ({
   maxValue,
   style = COMPONENT_STYLES.card
 }) => {
-  // Определяем иконку тренда
-  const TrendIcon = trend > 0 
-    ? <TrendingUp className="h-4 w-4" /> 
-    : trend < 0 
-      ? <TrendingDown className="h-4 w-4" /> 
-      : <Minus className="h-4 w-4" />;
+  // Определение иконки тренда на основе значения
+  const getTrendIcon = () => {
+    if (trend > 0) return <TrendingUp className="h-4 w-4" />;
+    if (trend < 0) return <TrendingDown className="h-4 w-4" />;
+    return <Minus className="h-4 w-4" />;
+  };
   
-  // Определяем цвет тренда на основе темы
-  const trendColor = trend > 0 
-    ? { color: COLORS.success }
-    : trend < 0 
-      ? { color: COLORS.danger }
-      : { color: COLORS.textColorSecondary };
+  // Определение цвета тренда на основе значения
+  const getTrendColor = () => {
+    if (trend > 0) return { color: COLORS.success };
+    if (trend < 0) return { color: COLORS.danger };
+    return { color: COLORS.textColorSecondary };
+  };
+
+  const TrendIcon = getTrendIcon();
+  const trendColor = getTrendColor();
 
   return (
-    <Card style={{...COMPONENT_STYLES.card, ...style}}>
+    <Card style={{ ...COMPONENT_STYLES.card, ...style }}>
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>{title}</CardTitle>
-          {trend !== 0 && (
+          <CardTitle 
+            className="text-sm font-medium" 
+            style={{ color: COLORS.textColorSecondary }}
+          >
+            {title}
+          </CardTitle>
+          
+          {trend !== 0 ? (
             <Badge 
               variant="outline" 
               className="flex gap-1 items-center"
@@ -50,16 +63,27 @@ export const StatCard: React.FC<StatCardProps> = ({
               {TrendIcon}
               <span className="text-xs">{Math.abs(trend)}%</span>
             </Badge>
-          )}
-          {trend === 0 && (
+          ) : (
             <span style={{ color: COLORS.textColorSecondary }}>{TrendIcon}</span>
           )}
         </div>
       </CardHeader>
+      
       <CardContent>
-        <p className="text-3xl font-semibold" style={{ color: COLORS.textColor }}>{value}</p>
+        <p 
+          className="text-3xl font-semibold" 
+          style={{ color: COLORS.textColor }}
+        >
+          {value}
+        </p>
+        
         {description && (
-          <p className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>{description}</p>
+          <p 
+            className="mt-1 text-sm" 
+            style={{ color: COLORS.textColorSecondary }}
+          >
+            {description}
+          </p>
         )}
       </CardContent>
     </Card>

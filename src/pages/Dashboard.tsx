@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
-import { MoodEntry, TestEntry, StatsData, WeeklyData } from "@/types";
+import { MoodEntry as MoodEntryType, TestEntry, StatsData, WeeklyData } from "@/types";
 import { getMoodEntries, getTestEntries } from "@/utils/storage";
 import { formatDate, formatTimeOfDay } from "@/utils/dateUtils";
 import { useAuth } from "@/hooks/useAuth";
-import { getAllPlayersMoodStats, getAllPlayersTestStats, getTeamMoodChartData } from "@/lib/api";
+import { 
+  getAllPlayersMoodStats, 
+  getAllPlayersTestStats, 
+  getTeamMoodChartData,
+  getAnalyticsMoodStats,
+  getAnalyticsTestStats
+} from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Users, TrendingUp, BarChart2, ListChecks, ChevronRight, Zap, SmilePlus, PieChart as PieChartIcon, Activity } from "lucide-react";
@@ -13,6 +19,33 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
+import { BalanceWheelChart } from "@/components/BalanceWheelChart";
+
+// Обновим тип MoodEntry
+type MoodEntry = {
+  _id: string;
+  userId: string;
+  date: string | Date;
+  mood: number;
+  energy: number;
+  notes?: string;
+  created: string;
+  updated: string;
+  // Добавим поля для совместимости с ответом API
+  value?: number;
+  energyValue?: number;
+};
+
+// Определим тип для результатов обработки
+type RecentStats = {
+  avgMood: number;
+  avgEnergy: number;
+  entries: Array<{
+    date: string;
+    mood: number;
+    energy: number;
+  }>;
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -45,16 +78,116 @@ const Dashboard = () => {
           // Для персонала загружаем общую статистику
           await loadStaffData();
         } else {
-          // Для игроков загружаем персональные данные
-    const loadedMoodEntries = getMoodEntries();
-    const loadedTestEntries = getTestEntries();
-    
+          // Для игроков загружаем персональные данные из API
+          try {
+            // Получаем данные о настроении из API
+            const moodResponse = await getAnalyticsMoodStats();
+            console.log("[Dashboard] API Mood Response:", moodResponse);
+            
+            // Обработка данных о настроении
+            let loadedMoodEntries = [];
+            if (moodResponse && moodResponse.data) {
+              // Проверяем формат ответа API
+              if (Array.isArray(moodResponse.data)) {
+                // Формат: [{userId, name, mood, energy, ...}, ...]
+                if (moodResponse.data.length > 0 && moodResponse.data[0].chartData) {
+                  // Если у нас есть данные графика для одного пользователя
+                  const playerData = moodResponse.data[0];
+                  // Преобразуем данные графика в формат MoodEntry
+                  loadedMoodEntries = playerData.chartData.map((item: any) => ({
+                    _id: `${playerData.userId}_${item.date}`,
+                    userId: playerData.userId,
+                    date: item.date,
+                    mood: item.mood,
+                    energy: item.energy,
+                    created: new Date().toISOString(),
+                    updated: new Date().toISOString()
+                  }));
+                } else {
+                  // Сохраняем сырые данные как есть
+                  loadedMoodEntries = moodResponse.data;
+                }
+              } else if (moodResponse.data.entries && Array.isArray(moodResponse.data.entries)) {
+                // Формат: {entries: [...]}
+                loadedMoodEntries = moodResponse.data.entries;
+              }
+            }
+            
+            console.log(`[Dashboard] Обработано ${loadedMoodEntries.length} записей о настроении из API`);
+            
+            // Получаем данные о тестах из API
+            const testResponse = await getAnalyticsTestStats();
+            console.log("[Dashboard] API Test Response:", testResponse);
+            
+            // Обработка данных о тестах
+            let loadedTestEntries = [];
+            if (testResponse && testResponse.data) {
+              if (Array.isArray(testResponse.data)) {
+                // Аналогичная проверка для данных тестов
+                if (testResponse.data.length > 0 && testResponse.data[0].tests) {
+                  // Если у нас есть детальные тесты для одного пользователя
+                  loadedTestEntries = testResponse.data[0].tests;
+                } else {
+                  loadedTestEntries = testResponse.data;
+                }
+              } else if (testResponse.data.entries && Array.isArray(testResponse.data.entries)) {
+                loadedTestEntries = testResponse.data.entries;
+              }
+            }
+            
+            console.log(`[Dashboard] Обработано ${loadedTestEntries.length} записей о тестах из API`);
+            
+            // Устанавливаем данные в состояние
     setMoodEntries(loadedMoodEntries);
     setTestEntries(loadedTestEntries);
     
-    // Process data for charts
-    processRecentStats(loadedMoodEntries);
-    processWeeklyData(loadedMoodEntries, loadedTestEntries);
+            // Обрабатываем данные для графиков
+            const recentStats = processRecentStats(loadedMoodEntries);
+            setRecentStats(recentStats.entries);
+            
+            const weeklyDataResult = processWeeklyData(loadedMoodEntries);
+            
+            // Преобразуем результаты в формат для графика
+            const weeklyChartData = [
+              { date: 'Вс', mood: weeklyDataResult.mood[0], energy: weeklyDataResult.energy[0] },
+              { date: 'Пн', mood: weeklyDataResult.mood[1], energy: weeklyDataResult.energy[1] },
+              { date: 'Вт', mood: weeklyDataResult.mood[2], energy: weeklyDataResult.energy[2] },
+              { date: 'Ср', mood: weeklyDataResult.mood[3], energy: weeklyDataResult.energy[3] },
+              { date: 'Чт', mood: weeklyDataResult.mood[4], energy: weeklyDataResult.energy[4] },
+              { date: 'Пт', mood: weeklyDataResult.mood[5], energy: weeklyDataResult.energy[5] },
+              { date: 'Сб', mood: weeklyDataResult.mood[6], energy: weeklyDataResult.energy[6] }
+            ];
+            
+            setWeeklyData(weeklyChartData);
+          } catch (apiError) {
+            console.error("Ошибка получения данных из API:", apiError);
+            // Резервный вариант: загружаем из локального хранилища
+            console.log("[Dashboard] Использую данные из локального хранилища");
+            const localMoodEntries = getMoodEntries();
+            const localTestEntries = getTestEntries();
+            
+            setMoodEntries(localMoodEntries);
+            setTestEntries(localTestEntries);
+            
+            // Обрабатываем данные для графиков из локального хранилища
+            const recentStats = processRecentStats(localMoodEntries);
+            setRecentStats(recentStats.entries);
+            
+            const weeklyDataResult = processWeeklyData(localMoodEntries);
+            
+            // Преобразуем результаты в формат для графика
+            const weeklyChartData = [
+              { date: 'Вс', mood: weeklyDataResult.mood[0], energy: weeklyDataResult.energy[0] },
+              { date: 'Пн', mood: weeklyDataResult.mood[1], energy: weeklyDataResult.energy[1] },
+              { date: 'Вт', mood: weeklyDataResult.mood[2], energy: weeklyDataResult.energy[2] },
+              { date: 'Ср', mood: weeklyDataResult.mood[3], energy: weeklyDataResult.energy[3] },
+              { date: 'Чт', mood: weeklyDataResult.mood[4], energy: weeklyDataResult.energy[4] },
+              { date: 'Пт', mood: weeklyDataResult.mood[5], energy: weeklyDataResult.energy[5] },
+              { date: 'Сб', mood: weeklyDataResult.mood[6], energy: weeklyDataResult.energy[6] }
+            ];
+            
+            setWeeklyData(weeklyChartData);
+          }
         }
       } catch (err) {
         console.error("Ошибка загрузки данных:", err);
@@ -151,84 +284,110 @@ const Dashboard = () => {
     });
   };
 
-  const processRecentStats = (entries: MoodEntry[]) => {
-    // Group by date and calculate averages
-    const lastSevenDays = [...Array(7)].map((_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      return date.toISOString().split('T')[0];
-    }).reverse();
-    
-    const dailyStats = lastSevenDays.map(dateStr => {
-      const dayEntries = entries.filter(entry => 
-        new Date(entry.date).toISOString().split('T')[0] === dateStr
-      );
-      
-      const moodAvg = dayEntries.length 
-        ? dayEntries.reduce((sum: number, entry: MoodEntry): number => sum + entry.mood, 0) / dayEntries.length 
-        : 0;
-        
-      const energyAvg = dayEntries.length 
-        ? dayEntries.reduce((sum: number, entry: MoodEntry): number => sum + entry.energy, 0) / dayEntries.length 
-        : 0;
+  const processRecentStats = (entries: MoodEntry[]): RecentStats => {
+    if (!entries || entries.length === 0) {
+      return {
+        avgMood: 0,
+        avgEnergy: 0,
+        entries: []
+      };
+    }
+
+    // Сортируем записи по дате (от самых новых к старым)
+    const sortedEntries = [...entries].sort((a, b) => {
+      const dateA = typeof a.date === 'string' ? new Date(a.date) : a.date as Date;
+      const dateB = typeof b.date === 'string' ? new Date(b.date) : b.date as Date;
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    // Берем последние 7 записей для графика
+    const recentEntries = sortedEntries.slice(0, 7).map(entry => {
+      const entryDate = typeof entry.date === 'string' ? new Date(entry.date) : entry.date as Date;
+      const formattedDate = `${entryDate.getDate().toString().padStart(2, '0')}.${(entryDate.getMonth() + 1).toString().padStart(2, '0')}`;
       
       return {
-        date: formatDate(new Date(dateStr), "d MMM"),
-        mood: Number(moodAvg.toFixed(1)),
-        energy: Number(energyAvg.toFixed(1))
+        date: formattedDate,
+        mood: typeof entry.mood === 'number' ? entry.mood : 
+              typeof entry.value === 'number' ? entry.value : 0,
+        energy: typeof entry.energy === 'number' ? entry.energy : 
+                typeof entry.energyValue === 'number' ? entry.energyValue : 0
       };
     });
     
-    setRecentStats(dailyStats);
+    // Рассчитываем средние значения для всех записей
+    const moodSum = entries.reduce((sum, entry) => {
+      const moodValue = typeof entry.mood === 'number' ? entry.mood : 
+                       (typeof entry.value === 'number' ? entry.value : 0);
+      return sum + moodValue;
+    }, 0);
+
+    const energySum = entries.reduce((sum, entry) => {
+      const energyValue = typeof entry.energy === 'number' ? entry.energy : 
+                         (typeof entry.energyValue === 'number' ? entry.energyValue : 0);
+      return sum + energyValue;
+    }, 0);
+
+    const avgMood = entries.length > 0 ? parseFloat((moodSum / entries.length).toFixed(1)) : 0;
+    const avgEnergy = entries.length > 0 ? parseFloat((energySum / entries.length).toFixed(1)) : 0;
+      
+      return {
+      avgMood,
+      avgEnergy,
+      entries: recentEntries.reverse() // Возвращаем в хронологическом порядке
+    };
   };
 
-  const processWeeklyData = (moodEntries: MoodEntry[], testEntries: TestEntry[]) => {
-    // Create weekly data for the last 4 weeks
-    const fourWeeksAgo = new Date();
-    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-    
-    const weeks = [...Array(4)].map((_, i) => {
-      const weekStart = new Date();
-      weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay() + 1);
-      
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      
-      return {
-        start: weekStart,
-        end: weekEnd,
-        label: `${formatDate(weekStart, "d MMM")} - ${formatDate(weekEnd, "d MMM")}`
-      };
-    }).reverse();
-    
-    const weeklyStats: WeeklyData[] = weeks.map(week => {
-      const weekMoodEntries = moodEntries.filter(entry => {
-        const entryDate = new Date(entry.date);
-        return entryDate >= week.start && entryDate <= week.end;
+  const processWeeklyData = (entries: MoodEntry[]) => {
+    if (!entries || entries.length === 0) return { mood: [0, 0, 0, 0, 0, 0, 0], energy: [0, 0, 0, 0, 0, 0, 0] };
+
+    const weekDays = [0, 1, 2, 3, 4, 5, 6];
+    const moodByDay = weekDays.map(day => {
+      const dayEntries = entries.filter(entry => {
+        if (!entry.date) return false;
+        try {
+          const entryDate = typeof entry.date === 'string' ? new Date(entry.date) : entry.date as Date;
+          return entryDate.getDay() === day;
+        } catch (e) {
+          return false;
+        }
       });
-      
-      const weekTestEntries = testEntries.filter(entry => {
-        const entryDate = new Date(entry.date);
-        return entryDate >= week.start && entryDate <= week.end;
-      });
-      
-      const moodAvg = weekMoodEntries.length 
-        ? weekMoodEntries.reduce((sum: number, entry: MoodEntry): number => sum + entry.mood, 0) / weekMoodEntries.length 
-        : 0;
-        
-      const energyAvg = weekMoodEntries.length 
-        ? weekMoodEntries.reduce((sum: number, entry: MoodEntry): number => sum + entry.energy, 0) / weekMoodEntries.length 
-        : 0;
-      
-      return {
-        week: week.label,
-        moodAvg: Number(moodAvg.toFixed(1)),
-        energyAvg: Number(energyAvg.toFixed(1)),
-        testsCompleted: weekTestEntries.length
-      };
+
+      if (dayEntries.length === 0) return 0;
+
+      const moodSum = dayEntries.reduce((sum, entry) => {
+        // Используем mood или value в зависимости от того, что доступно
+        const moodValue = typeof entry.mood === 'number' ? entry.mood : 
+                         (typeof entry.value === 'number' ? entry.value : 0);
+        return sum + moodValue;
+      }, 0);
+
+      return parseFloat((moodSum / dayEntries.length).toFixed(1));
     });
-    
-    setWeeklyData(weeklyStats);
+
+    const energyByDay = weekDays.map(day => {
+      const dayEntries = entries.filter(entry => {
+        if (!entry.date) return false;
+        try {
+          const entryDate = typeof entry.date === 'string' ? new Date(entry.date) : entry.date as Date;
+          return entryDate.getDay() === day;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      if (dayEntries.length === 0) return 0;
+
+      const energySum = dayEntries.reduce((sum, entry) => {
+        // Используем energy или energyValue в зависимости от того, что доступно
+        const energyValue = typeof entry.energy === 'number' ? entry.energy : 
+                           (typeof entry.energyValue === 'number' ? entry.energyValue : 0);
+        return sum + energyValue;
+      }, 0);
+
+      return parseFloat((energySum / dayEntries.length).toFixed(1));
+    });
+
+    return { mood: moodByDay, energy: energyByDay };
   };
 
   // Обработка состояния загрузки
@@ -277,19 +436,25 @@ const Dashboard = () => {
           </TabsTrigger>
           <TabsTrigger 
             value="analytics" 
-            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
+            disabled
+            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium opacity-50 cursor-not-allowed"
+            title="Функция будет доступна в ближайшем обновлении"
           >
             Аналитика
           </TabsTrigger>
           <TabsTrigger 
             value="balance" 
-            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
+            disabled
+            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium opacity-50 cursor-not-allowed"
+            title="Функция будет доступна в ближайшем обновлении"
           >
             Баланс колеса
           </TabsTrigger>
           <TabsTrigger 
             value="reports" 
-            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
+            disabled
+            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium opacity-50 cursor-not-allowed"
+            title="Функция будет доступна в ближайшем обновлении"
           >
             Отчеты
           </TabsTrigger>
@@ -373,6 +538,52 @@ const Dashboard = () => {
                   <div className="text-2xl font-bold" style={{ color: COLORS.textColor }}>{moodEntries.length}</div>
                   <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
                     Всего записей
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
+                    Среднее настроение
+                  </CardTitle>
+                  <SmilePlus className="h-4 w-4" style={{ color: COLORS.success }} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" style={{ color: COLORS.textColor }}>
+                    {moodEntries.length ? (() => {
+                      const moodSum = moodEntries.reduce((sum, entry) => {
+                        return sum + (entry.mood !== undefined ? entry.mood : 
+                                      entry.value !== undefined ? entry.value : 0);
+                      }, 0);
+                      return (moodSum / moodEntries.length).toFixed(1);
+                    })() : "N/A"}
+                  </div>
+                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
+                    Ваше среднее настроение
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
+                    Средняя энергия
+                  </CardTitle>
+                  <Zap className="h-4 w-4" style={{ color: COLORS.warning }} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" style={{ color: COLORS.textColor }}>
+                    {moodEntries.length ? (() => {
+                      const energySum = moodEntries.reduce((sum, entry) => {
+                        return sum + (entry.energy !== undefined ? entry.energy : 
+                                      entry.energyValue !== undefined ? entry.energyValue : 0);
+                      }, 0);
+                      return (energySum / moodEntries.length).toFixed(1);
+                    })() : "N/A"}
+                  </div>
+                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
+                    Ваш уровень энергии
                   </p>
                 </CardContent>
               </Card>
@@ -493,16 +704,16 @@ const Dashboard = () => {
                     <Pie
                       data={isStaff ? 
                         [
-                          { name: 'Отличное (8-10)', value: playersMoodStats.filter((p: any) => p.mood >= 8).length || 5 },
-                          { name: 'Хорошее (6-7)', value: playersMoodStats.filter((p: any) => p.mood >= 6 && p.mood < 8).length || 8 },
-                          { name: 'Среднее (4-5)', value: playersMoodStats.filter((p: any) => p.mood >= 4 && p.mood < 6).length || 4 },
-                          { name: 'Плохое (1-3)', value: playersMoodStats.filter((p: any) => p.mood >= 1 && p.mood < 4).length || 2 }
+                          { name: 'Отличное (8-10)', value: playersMoodStats.filter((p: any) => p.mood >= 8 || p.value >= 8).length || 5 },
+                          { name: 'Хорошее (6-7)', value: playersMoodStats.filter((p: any) => (p.mood >= 6 && p.mood < 8) || (p.value >= 6 && p.value < 8)).length || 8 },
+                          { name: 'Среднее (4-5)', value: playersMoodStats.filter((p: any) => (p.mood >= 4 && p.mood < 6) || (p.value >= 4 && p.value < 6)).length || 4 },
+                          { name: 'Плохое (1-3)', value: playersMoodStats.filter((p: any) => (p.mood >= 1 && p.mood < 4) || (p.value >= 1 && p.value < 4)).length || 2 }
                         ] : 
                         [
-                          { name: 'Отличное (8-10)', value: moodEntries.filter(e => e.mood >= 8).length || 0 },
-                          { name: 'Хорошее (6-7)', value: moodEntries.filter(e => e.mood >= 6 && e.mood < 8).length || 0 },
-                          { name: 'Среднее (4-5)', value: moodEntries.filter(e => e.mood >= 4 && e.mood < 6).length || 0 },
-                          { name: 'Плохое (1-3)', value: moodEntries.filter(e => e.mood >= 1 && e.mood < 4).length || 0 }
+                          { name: 'Отличное (8-10)', value: moodEntries.filter(e => e.mood >= 8 || e.value >= 8).length || 0 },
+                          { name: 'Хорошее (6-7)', value: moodEntries.filter(e => (e.mood >= 6 && e.mood < 8) || (e.value >= 6 && e.value < 8)).length || 0 },
+                          { name: 'Среднее (4-5)', value: moodEntries.filter(e => (e.mood >= 4 && e.mood < 6) || (e.value >= 4 && e.value < 6)).length || 0 },
+                          { name: 'Плохое (1-3)', value: moodEntries.filter(e => (e.mood >= 1 && e.mood < 4) || (e.value >= 1 && e.value < 4)).length || 0 }
                         ]}
                       cx="50%"
                       cy="50%"
@@ -540,13 +751,13 @@ const Dashboard = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart
                     data={[
-                      { day: 'Пн', энергия: isStaff ? (Math.random() * 3 + 6) : (moodEntries.filter(e => new Date(e.date).getDay() === 1).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 1).length || 0) },
-                      { day: 'Вт', энергия: isStaff ? (Math.random() * 3 + 6) : (moodEntries.filter(e => new Date(e.date).getDay() === 2).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 2).length || 0) },
-                      { day: 'Ср', энергия: isStaff ? (Math.random() * 3 + 5) : (moodEntries.filter(e => new Date(e.date).getDay() === 3).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 3).length || 0) },
-                      { day: 'Чт', энергия: isStaff ? (Math.random() * 3 + 5) : (moodEntries.filter(e => new Date(e.date).getDay() === 4).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 4).length || 0) },
-                      { day: 'Пт', энергия: isStaff ? (Math.random() * 3 + 4) : (moodEntries.filter(e => new Date(e.date).getDay() === 5).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 5).length || 0) },
-                      { day: 'Сб', энергия: isStaff ? (Math.random() * 3 + 7) : (moodEntries.filter(e => new Date(e.date).getDay() === 6).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 6).length || 0) },
-                      { day: 'Вс', энергия: isStaff ? (Math.random() * 3 + 7) : (moodEntries.filter(e => new Date(e.date).getDay() === 0).reduce((sum, e) => sum + e.energy, 0) / moodEntries.filter(e => new Date(e.date).getDay() === 0).length || 0) }
+                      { day: 'Пн', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 1) },
+                      { day: 'Вт', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 2) },
+                      { day: 'Ср', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 3) },
+                      { day: 'Чт', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 4) },
+                      { day: 'Пт', энергия: isStaff ? (Math.random() * 3 + 4) : calcDayAvgEnergy(moodEntries, 5) },
+                      { day: 'Сб', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 6) },
+                      { day: 'Вс', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 0) }
                     ]}
                     margin={{
                       top: 5,
@@ -615,7 +826,8 @@ const Dashboard = () => {
                             <div className="space-y-1">
                               <p className="text-sm font-medium leading-none" style={{ color: COLORS.textColor }}>Запись о настроении</p>
                               <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>
-                                Настроение: {entry.mood}, Энергия: {entry.energy}
+                                Настроение: {entry.mood !== undefined ? entry.mood : entry.value}, 
+                                Энергия: {entry.energy !== undefined ? entry.energy : entry.energyValue}
                               </p>
                             </div>
                             <div className="ml-auto font-medium" style={{ color: COLORS.primary }}>
@@ -706,17 +918,205 @@ const Dashboard = () => {
         <TabsContent value="balance" className="space-y-4">
           <Card style={COMPONENT_STYLES.card}>
             <CardHeader>
-              <CardTitle style={{ color: COLORS.textColor }}>Баланс колеса</CardTitle>
+              <CardTitle style={{ color: COLORS.textColor }}>Колесо баланса</CardTitle>
               <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                {isStaff ? "Баланс колеса команды" : "Баланс колеса вашей команды"}
+                {isStaff ? "Баланс колеса команды" : "Ваше колесо баланса"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[350px] flex items-center justify-center">
-                <p style={{ color: COLORS.textColorSecondary }}>
-                  {isStaff ? "Баланс колеса команды" : "Баланс колеса вашей команды"}
-                    </p>
+              {isStaff ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                    <CardHeader>
+                      <CardTitle style={{ color: COLORS.textColor, fontSize: '1.25rem' }}>
+                        Средние показатели команды
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="h-[600px]">
+                        <BalanceWheelChart 
+                          data={{
+                            physical: 7.2,
+                            emotional: 6.8,
+                            intellectual: 8.1,
+                            spiritual: 5.9,
+                            occupational: 7.5,
+                            social: 6.4,
+                            environmental: 7.0,
+                            financial: 6.2
+                          }}
+                          title="Усредненные показатели команды"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <div className="space-y-4">
+                    <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                      <CardHeader>
+                        <CardTitle style={{ color: COLORS.textColor, fontSize: '1.25rem' }}>
+                          Рекомендации по балансу команды
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-4">
+                          <li className="flex items-start">
+                            <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
+                            <p className="text-sm" style={{ color: COLORS.textColor }}>
+                              Уделите внимание духовному развитию команды - самый низкий показатель
+                            </p>
+                          </li>
+                          <li className="flex items-start">
+                            <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
+                            <p className="text-sm" style={{ color: COLORS.textColor }}>
+                              Развивайте социальные связи между игроками команды
+                            </p>
+                          </li>
+                          <li className="flex items-start">
+                            <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
+                            <p className="text-sm" style={{ color: COLORS.textColor }}>
+                              Проверьте финансовое благополучие игроков - один из низких показателей
+                            </p>
+                          </li>
+                        </ul>
+                      </CardContent>
+                      <CardFooter>
+                        <Button variant="outline" className="w-full" size="sm" 
+                                style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}>
+                          Подробный анализ
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    
+                    <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                      <CardHeader>
+                        <CardTitle style={{ color: COLORS.textColor, fontSize: '1.25rem' }}>
+                          Динамика изменений
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>
+                          По сравнению с прошлым месяцем:
+                        </p>
+                        <div className="mt-4 grid grid-cols-2 gap-4">
+                          <div className="flex items-center">
+                            <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Интеллектуальное развитие: +0.7
+                            </span>
+                          </div>
+                          <div className="flex items-center">
+                            <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Профессиональный рост: +0.5
+                            </span>
+                          </div>
+                          <div className="flex items-center">
+                            <div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Эмоциональное состояние: -0.3
+                            </span>
+                          </div>
+                          <div className="flex items-center">
+                            <div className="w-2 h-2 rounded-full bg-gray-500 mr-2"></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Другие показатели: без изменений
+                            </span>
+                          </div>
                   </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="h-[600px]">
+                    <BalanceWheelChart 
+                      data={{
+                        physical: 8,
+                        emotional: 6,
+                        intellectual: 9,
+                        spiritual: 5,
+                        occupational: 7,
+                        social: 6,
+                        environmental: 8,
+                        financial: 7
+                      }}
+                      title="Ваше колесо баланса"
+                    />
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                      <CardHeader>
+                        <CardTitle style={{ color: COLORS.textColor, fontSize: '1.25rem' }}>
+                          Персональные рекомендации
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-4">
+                          <li className="flex items-start">
+                            <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
+                            <p className="text-sm" style={{ color: COLORS.textColor }}>
+                              Уделите внимание духовному развитию - медитация, чтение и саморефлексия
+                            </p>
+                          </li>
+                          <li className="flex items-start">
+                            <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
+                            <p className="text-sm" style={{ color: COLORS.textColor }}>
+                              Работайте над эмоциональным состоянием - практикуйте техники релаксации
+                            </p>
+                          </li>
+                          <li className="flex items-start">
+                            <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
+                            <p className="text-sm" style={{ color: COLORS.textColor }}>
+                              Развивайте социальные связи - участвуйте в командных мероприятиях
+                            </p>
+                          </li>
+                        </ul>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                      <CardHeader>
+                        <CardTitle style={{ color: COLORS.textColor, fontSize: '1.25rem' }}>
+                          Сильные стороны
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          <li className="flex items-center">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.primary, marginRight: '0.5rem' }}></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Интеллектуальное развитие (9/10)
+                            </span>
+                          </li>
+                          <li className="flex items-center">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.primary, marginRight: '0.5rem' }}></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Физическое здоровье (8/10)
+                            </span>
+                          </li>
+                          <li className="flex items-center">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.primary, marginRight: '0.5rem' }}></div>
+                            <span className="text-sm" style={{ color: COLORS.textColor }}>
+                              Окружающая среда (8/10)
+                            </span>
+                          </li>
+                        </ul>
+                      </CardContent>
+                      <CardFooter>
+                        <Button variant="outline" className="w-full" size="sm" 
+                                style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}>
+                          Перейти в раздел "Колесо баланса"
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -741,6 +1141,52 @@ const Dashboard = () => {
       </Tabs>
     </div>
   );
+};
+
+// Обновим функцию calcDayAvgEnergy для корректной работы с типами
+const calcDayAvgEnergy = (entries: MoodEntry[], dayIndex: number) => {
+  const dayEntries = entries.filter(entry => {
+    if (!entry.date) return false;
+    try {
+      const entryDate = typeof entry.date === 'string' ? new Date(entry.date) : entry.date as Date;
+      return entryDate.getDay() === dayIndex;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  if (dayEntries.length === 0) return 0;
+
+  const energySum = dayEntries.reduce((sum, entry) => {
+    const energyValue = typeof entry.energy === 'number' ? entry.energy : 
+                        (typeof entry.energyValue === 'number' ? entry.energyValue : 0);
+    return sum + energyValue;
+  }, 0);
+
+  return parseFloat((energySum / dayEntries.length).toFixed(1));
+};
+
+// Обновим функцию calcDayAvgMood для работы с обоими форматами данных о настроении
+const calcDayAvgMood = (entries: MoodEntry[], dayIndex: number) => {
+  const dayEntries = entries.filter(entry => {
+    if (!entry.date) return false;
+    try {
+      const entryDate = typeof entry.date === 'string' ? new Date(entry.date) : entry.date as Date;
+      return entryDate.getDay() === dayIndex;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  if (dayEntries.length === 0) return 0;
+
+  const moodSum = dayEntries.reduce((sum, entry) => {
+    const moodValue = typeof entry.mood === 'number' ? entry.mood : 
+                      (typeof entry.value === 'number' ? entry.value : 0);
+    return sum + moodValue;
+  }, 0);
+
+  return parseFloat((moodSum / dayEntries.length).toFixed(1));
 };
 
 export default Dashboard;

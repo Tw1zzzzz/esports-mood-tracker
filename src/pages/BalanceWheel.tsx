@@ -18,6 +18,30 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 import { format, subDays, subMonths, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ru } from "date-fns/locale";
+import { BalanceWheelChart } from "@/components/BalanceWheelChart";
+
+// Пользовательские стили для компонентов
+const customStyles = {
+  cardBackground: "#1a1d2d",
+  cardBorder: "#3f4468",
+  primaryColor: "#4d82ff", 
+  textColor: "#ffffff",
+  textSecondary: "#8e94bb",
+  inputBackground: "#2d3148"
+};
+
+// Стили для CSS клаcсов
+const CLASS_STYLES = {
+  card: "bg-[#1a1d2d] border-[#3f4468] shadow-md",
+  title: "text-white",
+  description: "text-[#8e94bb]",
+  input: "bg-[#2d3148] border-[#3f4468] text-white",
+  button: "bg-[#4d82ff] hover:bg-[#3a6eec] text-white",
+  activeTab: "bg-[#4d82ff] text-white",
+  inactiveTab: "bg-transparent text-[#8e94bb] hover:text-white",
+  historyCard: "bg-[#1a1d2d] border border-[#3f4468] rounded-lg overflow-hidden shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all",
+  slider: "custom-slider" // Класс для кастомных слайдеров
+};
 
 // Categories for the balance wheel
 const categories = [
@@ -281,9 +305,7 @@ const BalanceWheel = () => {
   
   // Format data for the radar chart
   const getChartData = (wheel: BalanceWheelType) => {
-    return [
-      {
-        name: "Баланс",
+    return {
         physical: wheel.physical,
         emotional: wheel.emotional,
         intellectual: wheel.intellectual,
@@ -292,8 +314,7 @@ const BalanceWheel = () => {
         social: wheel.social,
         environmental: wheel.environmental,
         financial: wheel.financial
-      }
-    ];
+    };
   };
   
   // Get the latest wheel data
@@ -328,6 +349,21 @@ const BalanceWheel = () => {
 
   return (
     <div className="container py-6">
+      {/* Глобальные стили для слайдеров */}
+      <style>
+        {`
+          .custom-slider [role="slider"] {
+            background-color: #ffffff !important;
+            border: 2px solid #4d82ff !important;
+          }
+          .custom-slider [data-orientation="horizontal"] {
+            background-color: #3f4468 !important;
+          }
+          .custom-slider [data-orientation="horizontal"] > span {
+            background-color: #4d82ff !important;
+          }
+        `}
+      </style>
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight" style={{ color: COLORS.textColor }}>Колесо баланса</h2>
@@ -335,7 +371,7 @@ const BalanceWheel = () => {
         
         {isStaffView && (
           <div className="mb-4">
-            <Label htmlFor="player-select" className="block text-sm font-medium mb-2" style={{ color: COLORS.textColor }}>
+            <Label htmlFor="player-select" className="block text-sm font-medium mb-2" style={{ color: customStyles.textColor }}>
               Выберите игрока:
             </Label>
             <Select 
@@ -343,12 +379,12 @@ const BalanceWheel = () => {
               onValueChange={(value) => setSelectedPlayer(value)}
               disabled={loadingPlayers}
             >
-              <SelectTrigger className="w-full" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, color: COLORS.textColor }}>
+              <SelectTrigger className="w-full" style={{ backgroundColor: customStyles.inputBackground, borderColor: customStyles.cardBorder, color: customStyles.textColor }}>
                 <SelectValue placeholder="Выберите игрока" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent style={{ backgroundColor: customStyles.cardBackground, borderColor: customStyles.cardBorder }}>
                 {players.map((player) => (
-                  <SelectItem key={player.id} value={player.id || ''}>
+                  <SelectItem key={player.id} value={player.id || ''} style={{ color: customStyles.textColor }}>
                     {player.name}
                   </SelectItem>
                 ))}
@@ -357,15 +393,15 @@ const BalanceWheel = () => {
           </div>
         )}
         
-        <Card className="mb-4" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+        <Card className={`mb-4 ${CLASS_STYLES.card}`}>
           <CardHeader>
-            <CardTitle style={{ color: COLORS.textColor }}>
+            <CardTitle className={CLASS_STYLES.title}>
               {isStaffView ? 
                 `Колесо баланса игрока` :
                 "Заполните ваше колесо баланса"
               }
             </CardTitle>
-            <CardDescription style={{ color: COLORS.textColorSecondary }}>
+            <CardDescription className={CLASS_STYLES.description}>
               {isStaffView ? 
                 "Визуализация колеса баланса игрока" : 
                 "Ваше текущее колесо баланса"
@@ -374,62 +410,59 @@ const BalanceWheel = () => {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue={viewMode} onValueChange={(value) => setViewMode(value as "current" | "history")}>
-              <TabsList className="grid w-full grid-cols-2 mb-6" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
-                <TabsTrigger value="current" 
-                  style={{ 
-                    color: viewMode === "current" ? COLORS.textColor : COLORS.textColorSecondary, 
-                    backgroundColor: viewMode === "current" ? COLORS.primary : 'transparent'
-                  }}
+              <TabsList className="grid w-full grid-cols-2 mb-6 bg-[#1a1d2d] border-[#3f4468]">
+                <TabsTrigger 
+                  value="current" 
+                  className={viewMode === "current" ? CLASS_STYLES.activeTab : CLASS_STYLES.inactiveTab}
                 >
                   Текущее состояние
                 </TabsTrigger>
-                <TabsTrigger value="history" 
-                  style={{ 
-                    color: viewMode === "history" ? COLORS.textColor : COLORS.textColorSecondary, 
-                    backgroundColor: viewMode === "history" ? COLORS.primary : 'transparent'
-                  }}
+                <TabsTrigger 
+                  value="history" 
+                  className={viewMode === "history" ? CLASS_STYLES.activeTab : CLASS_STYLES.inactiveTab}
                 >
                   История
                 </TabsTrigger>
               </TabsList>
-
+              
               <TabsContent value="current">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Left column - Balance Wheel Form */}
-                  <Card className={`${!canEdit ? "opacity-50 pointer-events-none" : ""}`}>
+                  <Card className={`${!canEdit ? "opacity-50 pointer-events-none" : ""} ${CLASS_STYLES.card}`}>
                     <CardHeader>
-                      <CardTitle>Заполните ваше колесо баланса</CardTitle>
-                      <CardDescription>
+                      <CardTitle className={CLASS_STYLES.title}>Заполните ваше колесо баланса</CardTitle>
+                      <CardDescription className={CLASS_STYLES.description}>
                         Оцените каждую область вашей жизни на данный момент
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="date">Дата</Label>
+                        <Label htmlFor="date" className={CLASS_STYLES.title}>Дата</Label>
                         <Input
                           id="date"
                           type="date"
                           value={date}
                           onChange={(e) => setDate(e.target.value)}
                           disabled={!canEdit || savingWheel}
+                          className={CLASS_STYLES.input}
                         />
                       </div>
                       
                       {categories.map((category) => (
                         <div key={category.id} className="space-y-2">
                           <div className="flex justify-between">
-                            <Label htmlFor={category.id}>{category.name}</Label>
-                            <span className="text-sm font-medium">
+                            <Label htmlFor={category.id} className={CLASS_STYLES.title}>{category.name}</Label>
+                            <span className={`text-sm font-medium ${CLASS_STYLES.title}`}>
                               {values[category.id as keyof typeof values]}/10
                             </span>
                           </div>
                           <Popover>
                             <PopoverTrigger asChild>
-                              <button className="text-sm text-muted-foreground hover:underline">
+                              <button className={`text-sm hover:underline ${CLASS_STYLES.description}`}>
                                 Что это значит?
                               </button>
                             </PopoverTrigger>
-                            <PopoverContent side="right">
+                            <PopoverContent side="right" className="bg-[#2d3148] border-[#3f4468] text-white">
                               <p className="text-sm">{category.description}</p>
                             </PopoverContent>
                           </Popover>
@@ -441,6 +474,7 @@ const BalanceWheel = () => {
                             value={[values[category.id as keyof typeof values]]}
                             onValueChange={(value) => handleSliderChange(category.id as keyof typeof values, value)}
                             disabled={!canEdit || savingWheel}
+                            className={CLASS_STYLES.slider}
                           />
                         </div>
                       ))}
@@ -448,9 +482,8 @@ const BalanceWheel = () => {
                     <CardFooter>
                       <Button 
                         onClick={handleSave} 
-                        className="w-full" 
+                        className={`w-full ${CLASS_STYLES.button}`} 
                         disabled={!canEdit || savingWheel}
-                        style={{ backgroundColor: COLORS.primary, color: COLORS.textColor }}
                       >
                         {savingWheel ? "Сохранение..." : "Сохранить"}
                       </Button>
@@ -458,9 +491,9 @@ const BalanceWheel = () => {
                   </Card>
                   
                   {/* Right column - Current Wheel Visualization */}
-                  <Card>
+                  <Card className={CLASS_STYLES.card}>
                     <CardHeader>
-                      <CardTitle>
+                      <CardTitle className={CLASS_STYLES.title}>
                         {isStaff ? (
                           selectedPlayer ? 
                             `Колесо баланса игрока` : 
@@ -469,7 +502,7 @@ const BalanceWheel = () => {
                           "Ваше текущее колесо баланса"
                         )}
                       </CardTitle>
-                      <CardDescription>
+                      <CardDescription className={CLASS_STYLES.description}>
                         {latestWheel ? (
                           `Последнее обновление: ${latestWheel.date.toLocaleDateString()}`
                         ) : (
@@ -479,53 +512,17 @@ const BalanceWheel = () => {
                     </CardHeader>
                     <CardContent className="flex items-center justify-center h-[900px] p-0">
                       {isLoading ? (
-                        <p>Загрузка данных...</p>
+                        <p className={CLASS_STYLES.title}>Загрузка данных...</p>
                       ) : latestWheel ? (
-                        <ResponsiveRadar
+                        <BalanceWheelChart 
                           data={getChartData(latestWheel)}
-                          keys={categories.map(c => c.id)}
-                          indexBy="name"
-                          maxValue={10}
-                          margin={{ top: 120, right: 120, bottom: 120, left: 120 }}
-                          borderColor={{ from: 'color', modifiers: [['darker', 0.6]] }}
-                          gridLabelOffset={40}
-                          dotSize={16}
-                          dotColor={{ theme: 'background' }}
-                          dotBorderWidth={3}
-                          colors={{ scheme: 'category10' }}
-                          blendMode="multiply"
-                          motionConfig="wobbly"
-                          gridLevels={5}
-                          legends={[
-                            {
-                              anchor: 'top',
-                              direction: 'row',
-                              translateX: 0,
-                              translateY: -100,
-                              itemWidth: 120,
-                              itemHeight: 24,
-                              itemTextColor: COLORS.textColor,
-                              itemDirection: 'left-to-right',
-                              itemOpacity: 1,
-                              symbolSize: 18,
-                              symbolShape: 'circle',
-                              effects: [
-                                {
-                                  on: 'hover',
-                                  style: {
-                                    itemTextColor: COLORS.primary,
-                                    itemOpacity: 0.9
-                                  }
-                                }
-                              ]
-                            }
-                          ]}
+                          title={isStaff ? `Колесо баланса игрока` : "Ваше текущее колесо баланса"}
                         />
                       ) : (
                         <div className="text-center">
-                          <p>Нет данных для отображения</p>
+                          <p className={CLASS_STYLES.title}>Нет данных для отображения</p>
                           {canEdit && (
-                            <p className="text-sm text-muted-foreground mt-2">
+                            <p className={`text-sm mt-2 ${CLASS_STYLES.description}`}>
                               Заполните форму слева, чтобы создать ваше первое колесо баланса
                             </p>
                           )}
@@ -537,9 +534,9 @@ const BalanceWheel = () => {
               </TabsContent>
               
               <TabsContent value="history">
-                <Card>
+                <Card className={CLASS_STYLES.card}>
                   <CardHeader>
-                    <CardTitle>
+                    <CardTitle className={CLASS_STYLES.title}>
                       {isStaff ? (
                         selectedPlayer ? 
                           `История колес баланса игрока` : 
@@ -548,7 +545,7 @@ const BalanceWheel = () => {
                         "Ваша история колес баланса"
                       )}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className={CLASS_STYLES.description}>
                       {isLoading ? (
                         "Загрузка истории..."
                       ) : wheelHistory.length > 0 ? (
@@ -561,48 +558,48 @@ const BalanceWheel = () => {
                   <CardContent>
                     {isLoading ? (
                       <div className="text-center py-8">
-                        <p>Загрузка истории...</p>
+                        <p className={CLASS_STYLES.title}>Загрузка истории...</p>
                       </div>
                     ) : wheelHistory.length === 0 ? (
                       <div className="text-center py-8">
-                        <p>Нет истории колес баланса</p>
+                        <p className={CLASS_STYLES.title}>Нет истории колес баланса</p>
                         {canEdit && (
-                          <p className="text-sm text-muted-foreground mt-2">
+                          <p className={`text-sm mt-2 ${CLASS_STYLES.description}`}>
                             Заполните форму на вкладке "Текущее состояние", чтобы создать ваше первое колесо баланса
                           </p>
                         )}
                       </div>
                     ) : (
-                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                      <div className={`grid gap-6 ${wheelHistory.length === 1 ? 'md:grid-cols-1' : wheelHistory.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
                         {wheelHistory.map((wheel) => (
-                          <Card key={wheel.id || `wheel-${wheel._id || Math.random()}`} className="overflow-hidden">
-                            <CardHeader className="p-4">
-                              <CardTitle className="text-sm font-medium">
-                                {wheel.date.toLocaleDateString()}
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-0">
-                              <div className="h-48">
-                                <ResponsiveRadar
-                                  data={getChartData(wheel)}
-                                  keys={categories.map(c => c.id)}
-                                  indexBy="name"
-                                  maxValue={10}
-                                  margin={{ top: 30, right: 30, bottom: 30, left: 30 }}
-                                  borderColor={{ from: 'color' }}
-                                  gridLabelOffset={12}
-                                  dotSize={4}
-                                  dotColor={{ theme: 'background' }}
-                                  dotBorderWidth={1}
-                                  colors={{ scheme: 'category10' }}
-                                  blendMode="multiply"
-                                  motionConfig="wobbly"
-                                  enableDots={false}
-                                  enableDotLabel={false}
-                                />
-                              </div>
-                            </CardContent>
-                          </Card>
+                          <div 
+                            key={wheel.id || `wheel-${wheel._id || Math.random()}`} 
+                            className={CLASS_STYLES.historyCard}
+                            style={{ boxShadow: '0 6px 16px rgba(0, 0, 0, 0.25)' }}
+                          >
+                            <div className="p-4 border-b border-[#3f4468] bg-[#1d2135]">
+                              <h3 className="text-base font-medium text-white">
+                                {(() => {
+                                  try {
+                                    const dateObj = wheel.date instanceof Date ? wheel.date : new Date(wheel.date);
+                                    return dateObj.toLocaleDateString('ru-RU', {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    });
+                                  } catch (e) {
+                                    return 'Дата неизвестна';
+                                  }
+                                })()}
+                              </h3>
+                            </div>
+                            <div className="h-[300px] p-4 flex items-center justify-center">
+                              <BalanceWheelChart
+                                data={getChartData(wheel)}
+                                compact={true}
+                              />
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}

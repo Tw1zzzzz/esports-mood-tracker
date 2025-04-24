@@ -11,6 +11,7 @@ export const ROUTES = {
   PROFILE: '/profile',
   TOP_PLAYERS: '/top-players',
   ANALYTICS: '/analytics',
+  NEW_ANALYTICS: '/new-analytics',
   FILE_STORAGE: '/file-storage',
   
   // Маршруты для игроков

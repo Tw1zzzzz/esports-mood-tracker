@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -15,63 +15,119 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
-const Index = () => {
+/**
+ * Тип роли пользователя
+ */
+type UserRole = "player" | "staff";
+
+/**
+ * Интерфейс для формы входа
+ */
+interface LoginFormState {
+  email: string;
+  password: string;
+}
+
+/**
+ * Интерфейс для формы регистрации
+ */
+interface RegisterFormState {
+  email: string;
+  password: string;
+  name: string;
+  role: UserRole;
+}
+
+/**
+ * Главная страница с формами входа и регистрации
+ */
+const Index: React.FC = () => {
   const navigate = useNavigate();
   const { login, register, user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   
-  // Login form state
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
+  // Состояние форм в объектах для лучшей организации
+  const [loginForm, setLoginForm] = useState<LoginFormState>({
+    email: "",
+    password: ""
+  });
   
-  // Register form state
-  const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
-  const [registerName, setRegisterName] = useState("");
-  const [registerRole, setRegisterRole] = useState<"player" | "staff">("player");
+  const [registerForm, setRegisterForm] = useState<RegisterFormState>({
+    email: "",
+    password: "",
+    name: "",
+    role: "player"
+  });
 
-  // Handle navigation after render
+  /**
+   * Обновление полей формы входа
+   */
+  const updateLoginField = (field: keyof LoginFormState, value: string): void => {
+    setLoginForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  /**
+   * Обновление полей формы регистрации
+   */
+  const updateRegisterField = <K extends keyof RegisterFormState>(
+    field: K, 
+    value: RegisterFormState[K]
+  ): void => {
+    setRegisterForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  /**
+   * Перенаправление пользователя после аутентификации
+   */
   useEffect(() => {
-    console.log('User state changed:', user);
     if (user) {
-      console.log('User is authenticated, navigating to dashboard');
       navigate("/");
     }
   }, [user, navigate]);
   
-  const handleLogin = async (e: React.FormEvent) => {
+  /**
+   * Обработчик отправки формы входа
+   */
+  const handleLogin = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    if (!loginEmail || !loginPassword) {
+    const { email, password } = loginForm;
+    
+    if (!email.trim() || !password) {
       toast.error("Пожалуйста, заполните все поля");
       return;
     }
     
     try {
       setLoading(true);
-      await login(loginEmail, loginPassword);
-      console.log('Login successful, ready to navigate');
+      await login(email, password);
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Ошибка входа:', error);
+      toast.error("Не удалось выполнить вход. Проверьте данные и попробуйте снова.");
     } finally {
       setLoading(false);
     }
   };
   
-  const handleRegister = async (e: React.FormEvent) => {
+  /**
+   * Обработчик отправки формы регистрации
+   */
+  const handleRegister = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    if (!registerEmail || !registerPassword || !registerName) {
+    const { email, password, name, role } = registerForm;
+    
+    if (!email.trim() || !password || !name.trim()) {
       toast.error("Пожалуйста, заполните все поля");
       return;
     }
     
     try {
       setLoading(true);
-      await register(registerEmail, registerPassword, registerName, registerRole);
-      console.log('Registration successful, ready to navigate');
+      await register(email, password, name, role);
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Ошибка регистрации:', error);
+      toast.error("Не удалось зарегистрироваться. Попробуйте позже или обратитесь в поддержку.");
     } finally {
       setLoading(false);
     }
@@ -80,10 +136,10 @@ const Index = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-4xl flex flex-col lg:flex-row gap-8 items-center">
-        {/* Left side - Welcome text */}
+        {/* Левая сторона - приветственный текст */}
         <div className="flex-1 text-center lg:text-left">
           <h1 className="text-4xl lg:text-6xl font-bold text-esports-blue mb-4">
-            1WIN Tracker Academy
+            1WIN
           </h1>
           <p className="text-xl lg:text-2xl text-esports-darkGray mb-8">
             Отследи свой успех
@@ -94,7 +150,7 @@ const Index = () => {
           </p>
         </div>
         
-        {/* Right side - Auth forms */}
+        {/* Правая сторона - формы аутентификации */}
         <div className="flex-1 w-full max-w-md">
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -102,6 +158,7 @@ const Index = () => {
               <TabsTrigger value="register">Регистрация</TabsTrigger>
             </TabsList>
             
+            {/* Вкладка входа */}
             <TabsContent value="login">
               <Card>
                 <CardHeader>
@@ -118,8 +175,10 @@ const Index = () => {
                         id="login-email"
                         type="email"
                         placeholder="example@email.com"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
+                        value={loginForm.email}
+                        onChange={(e) => updateLoginField('email', e.target.value)}
+                        disabled={loading}
+                        autoComplete="email"
                       />
                     </div>
                     <div className="space-y-2">
@@ -127,8 +186,10 @@ const Index = () => {
                       <Input
                         id="login-password"
                         type="password"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
+                        value={loginForm.password}
+                        onChange={(e) => updateLoginField('password', e.target.value)}
+                        disabled={loading}
+                        autoComplete="current-password"
                       />
                     </div>
                   </CardContent>
@@ -145,6 +206,7 @@ const Index = () => {
               </Card>
             </TabsContent>
             
+            {/* Вкладка регистрации */}
             <TabsContent value="register">
               <Card>
                 <CardHeader>
@@ -160,8 +222,10 @@ const Index = () => {
                       <Input
                         id="register-name"
                         placeholder="Иван Иванов"
-                        value={registerName}
-                        onChange={(e) => setRegisterName(e.target.value)}
+                        value={registerForm.name}
+                        onChange={(e) => updateRegisterField('name', e.target.value)}
+                        disabled={loading}
+                        autoComplete="name"
                       />
                     </div>
                     <div className="space-y-2">
@@ -170,8 +234,10 @@ const Index = () => {
                         id="register-email"
                         type="email"
                         placeholder="example@email.com"
-                        value={registerEmail}
-                        onChange={(e) => setRegisterEmail(e.target.value)}
+                        value={registerForm.email}
+                        onChange={(e) => updateRegisterField('email', e.target.value)}
+                        disabled={loading}
+                        autoComplete="email"
                       />
                     </div>
                     <div className="space-y-2">
@@ -179,8 +245,10 @@ const Index = () => {
                       <Input
                         id="register-password"
                         type="password"
-                        value={registerPassword}
-                        onChange={(e) => setRegisterPassword(e.target.value)}
+                        value={registerForm.password}
+                        onChange={(e) => updateRegisterField('password', e.target.value)}
+                        disabled={loading}
+                        autoComplete="new-password"
                       />
                     </div>
                     <div className="space-y-2">
@@ -189,18 +257,20 @@ const Index = () => {
                         <label className="flex items-center space-x-2">
                           <input
                             type="radio"
-                            checked={registerRole === "player"}
-                            onChange={() => setRegisterRole("player")}
+                            checked={registerForm.role === "player"}
+                            onChange={() => updateRegisterField('role', "player")}
                             className="h-4 w-4"
+                            disabled={loading}
                           />
                           <span>Игрок</span>
                         </label>
                         <label className="flex items-center space-x-2">
                           <input
                             type="radio"
-                            checked={registerRole === "staff"}
-                            onChange={() => setRegisterRole("staff")}
+                            checked={registerForm.role === "staff"}
+                            onChange={() => updateRegisterField('role', "staff")}
                             className="h-4 w-4"
+                            disabled={loading}
                           />
                           <span>Персонал</span>
                         </label>

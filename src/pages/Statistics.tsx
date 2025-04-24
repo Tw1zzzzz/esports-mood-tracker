@@ -10,7 +10,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { MoodEntry, TestEntry, StatsData } from "@/types";
 import { getMoodEntries, getTestEntries } from "@/utils/storage";
 import { formatDate } from "@/utils/dateUtils";
-import { getAllPlayersMoodStats, getAllPlayersTestStats, getPlayers, getPlayerStats } from "@/lib/api";
+import { getMoodStats, getTestStats, getAllPlayersMoodStats, getAllPlayersTestStats, getPlayers, getPlayerStats } from "@/lib/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 import { prepareMoodDataByTimeRange, prepareTestDataByTimeRange, prepareTestDistribution } from "@/utils/statsUtils";
@@ -141,12 +141,44 @@ const Statistics = () => {
     }
   }, [moodEntries, testEntries, timeRange]);
   
-  const loadPersonalData = () => {
-    const loadedMoodEntries = getMoodEntries();
-    const loadedTestEntries = getTestEntries();
-    
-    setMoodEntries(loadedMoodEntries);
-    setTestEntries(loadedTestEntries);
+  const loadPersonalData = async () => {
+    try {
+      console.log('Загрузка личной статистики игрока');
+      setLoadingPlayersData(true);
+      setLoadingError(null);
+      
+      // Получаем данные о настроении из API
+      const moodResponse = await getMoodStats();
+      if (moodResponse.data && Array.isArray(moodResponse.data)) {
+        console.log(`Получено ${moodResponse.data.length} записей о настроении`);
+        setMoodEntries(moodResponse.data);
+      } else {
+        console.warn('Не получено данных о настроении');
+        setMoodEntries([]);
+      }
+      
+      // Получаем данные о тестах из API
+      const testResponse = await getTestStats();
+      if (testResponse.data && Array.isArray(testResponse.data)) {
+        console.log(`Получено ${testResponse.data.length} записей о тестах`);
+        setTestEntries(testResponse.data);
+      } else {
+        console.warn('Не получено данных о тестах');
+        setTestEntries([]);
+      }
+    } catch (error) {
+      console.error('Ошибка при загрузке данных:', error);
+      setLoadingError(`Ошибка загрузки данных: ${(error as Error).message}`);
+      
+      // В случае ошибки API, пытаемся получить данные из локального хранилища как запасной вариант
+      const loadedMoodEntries = getMoodEntries();
+      const loadedTestEntries = getTestEntries();
+      
+      setMoodEntries(loadedMoodEntries);
+      setTestEntries(loadedTestEntries);
+    } finally {
+      setLoadingPlayersData(false);
+    }
   };
   
   const fetchPlayers = async () => {
@@ -347,16 +379,16 @@ const Statistics = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Статистика</h1>
+        <h1 className="text-2xl font-bold text-white">Статистика</h1>
         
         <Select 
           value={activeTab} 
           onValueChange={(value: "personal" | "players") => setActiveTab(value)}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] bg-[#1C1F3B] border-[#293056] text-white">
             <SelectValue placeholder="Выберите режим" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-[#1C1F3B] border-[#293056] text-white">
             <SelectItem value="personal">Статистика игрока</SelectItem>
             <SelectItem value="players">Общая статистика</SelectItem>
           </SelectContent>
@@ -368,10 +400,10 @@ const Statistics = () => {
         <div className="space-y-6">
           <div className="mb-4">
             <Select value={selectedPlayerId} onValueChange={handlePlayerChange}>
-              <SelectTrigger className="w-[250px]">
+              <SelectTrigger className="w-[250px] bg-[#1C1F3B] border-[#293056] text-white">
                 <SelectValue placeholder="Выберите игрока" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-[#1C1F3B] border-[#293056] text-white">
                 {players.map((player) => (
                   <SelectItem key={player._id} value={player._id}>
                     {player.name}
@@ -383,11 +415,11 @@ const Statistics = () => {
           
           {loadingPlayerStats ? (
             <div className="flex justify-center items-center py-20">
-              <p>Загрузка данных игрока...</p>
+              <p className="text-white">Загрузка данных игрока...</p>
             </div>
           ) : loadingError ? (
             <div className="flex justify-center items-center py-20">
-              <p className="text-danger">{loadingError}</p>
+              <p className="text-red-500">{loadingError}</p>
             </div>
           ) : (
             <PersonalStats

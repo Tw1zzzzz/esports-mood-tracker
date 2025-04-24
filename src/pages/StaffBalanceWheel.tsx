@@ -60,15 +60,12 @@ const StaffBalanceWheel = () => {
       try {
         setLoadingPlayers(true);
         setPlayersDataError(false); // Сбрасываем флаг ошибки в начале
-        console.log("[DEBUG] Загрузка списка игроков...");
         
         const response = await getPlayers();
-        console.log("[DEBUG] Получено игроков:", response.data?.length || 0);
         
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
           // Убедимся, что у всех игроков есть id
           const validPlayers = response.data.filter(player => player && player._id);
-          console.log(`[DEBUG] Отфильтровано валидных игроков: ${validPlayers.length}`);
           
           if (validPlayers.length > 0) {
             // Преобразуем _id в id, если id отсутствует
@@ -80,34 +77,24 @@ const StaffBalanceWheel = () => {
             setPlayers(processedPlayers);
             setPlayersDataError(false); // Явно устанавливаем флаг в false при успешной загрузке
             
-            // Найдем игрока Гриша с email nbl@gmail.com
-            const grishaPlayer = processedPlayers.find(player => 
-              (player.email && player.email.includes('nbl@gmail.com')) ||
-              (player.name && player.name === 'Гриша')
-            );
-            
-            if (grishaPlayer) {
-              console.log(`[DEBUG] Найден игрок Гриша с ID: ${grishaPlayer.id}`);
-              setSelectedPlayerId(grishaPlayer.id);
-            } else if (processedPlayers.length > 0) {
-              const firstPlayerId = processedPlayers[0].id;
-              console.log(`[DEBUG] Игрок Гриша не найден, выбираем первого игрока: ${firstPlayerId}`);
-              setSelectedPlayerId(firstPlayerId);
+            // Выбираем первого игрока по умолчанию
+            if (processedPlayers.length > 0) {
+              setSelectedPlayerId(processedPlayers[0].id);
             }
           } else {
-            console.log("[DEBUG] Не найдено ни одного игрока с действительным ID, используем тестовые данные");
+            // Если нет валидных игроков, используем тестовые данные
             setPlayers(TEST_PLAYERS);
             setSelectedPlayerId(TEST_PLAYERS[0].id);
             setPlayersDataError(true);
           }
         } else {
-          console.log("[DEBUG] Получен пустой список игроков или неверный формат данных, используем тестовые данные");
+          // Если нет данных или неверный формат, используем тестовые данные
           setPlayers(TEST_PLAYERS);
           setSelectedPlayerId(TEST_PLAYERS[0].id);
           setPlayersDataError(true);
         }
       } catch (error) {
-        console.error("[DEBUG] Ошибка при загрузке игроков:", error);
+        console.error("Ошибка при загрузке игроков:", error);
         setPlayers(TEST_PLAYERS);
         setSelectedPlayerId(TEST_PLAYERS[0].id);
         setPlayersDataError(true);
@@ -201,21 +188,7 @@ const StaffBalanceWheel = () => {
   // Обработка выбора игрока и отображение его колеса баланса
   useEffect(() => {
     if (selectedPlayerId && allPlayersWheelData.length > 0) {
-      console.log(`[DEBUG] Выбран игрок с ID: ${selectedPlayerId}, ищем его данные колеса баланса`);
       setLoading(true);
-      
-      // Проверяем, это ли специальный пользователь "Гриша" с email "nbl@gmail.com"
-      const isNblUser = players.some(p => 
-        p.id === selectedPlayerId && 
-        (p.name === "Гриша" || p.email === "nbl@gmail.com")
-      );
-      
-      // Если это пользователь nbl@gmail.com, всегда делаем прямой запрос к API
-      if (isNblUser) {
-        console.log("[DEBUG] Обнаружен пользователь nbl@gmail.com (Гриша), делаем прямой запрос");
-        refreshPlayerData(selectedPlayerId);
-        return;
-      }
       
       // Варианты поиска данных для выбранного игрока (проверяем разные возможные поля)
       const playerData = allPlayersWheelData.find(data => 
@@ -224,12 +197,7 @@ const StaffBalanceWheel = () => {
         (data.id && (data.id === selectedPlayerId || data.id.toString() === selectedPlayerId))
       );
       
-      console.log(`[DEBUG] Найденные данные для игрока:`, playerData);
-      
       if (playerData && playerData.wheels && playerData.wheels.length > 0) {
-        console.log(`[DEBUG] Найдены данные колеса баланса (${playerData.wheels.length} записей) для игрока ${selectedPlayerId}`);
-        console.log(`[DEBUG] Первая запись:`, playerData.wheels[0]);
-        
         const latestWheel = playerData.wheels[0]; // Первое колесо (самое новое)
         setBalanceWheelData({
           physical: latestWheel.physical || 0,
@@ -246,14 +214,10 @@ const StaffBalanceWheel = () => {
         setBalanceWheels(playerData.wheels);
         setLoading(false);
       } else {
-        console.log(`[DEBUG] Данные колеса баланса не найдены для игрока ${selectedPlayerId}`);
-        console.log(`[DEBUG] Попробуем загрузить данные напрямую через getPlayerBalanceWheels...`);
-        
-        // Если не нашли данные в общем запросе, попробуем загрузить напрямую
+        // Если не нашли данные в общем запросе, загружаем напрямую
         forceFetchBalanceWheelForPlayer(selectedPlayerId);
       }
     } else if (selectedPlayerId) {
-      console.log(`[DEBUG] Игрок выбран (${selectedPlayerId}), но нет данных о колесах баланса`);
       forceFetchBalanceWheelForPlayer(selectedPlayerId);
     }
   }, [selectedPlayerId, allPlayersWheelData]);
@@ -263,93 +227,9 @@ const StaffBalanceWheel = () => {
     try {
       setLoading(true);
       setApiError(null);
-      console.log(`[DEBUG] Загрузка данных колеса баланса для игрока ${playerId}...`);
       
-      // Проверяем, это ли специальный пользователь Гриша
-      const isGrisha = players.some(p => 
-        p.id === playerId && 
-        (p.name === "Гриша" || p.email === "nbl@gmail.com")
-      );
-      
-      // Всегда делаем прямой запрос для Гриши
-      if (isGrisha) {
-        console.log(`[DEBUG] Обнаружен особый пользователь (Гриша), всегда делаем прямой запрос к API`);
-        
-        const response = await getPlayerBalanceWheels(playerId);
-        console.log(`[DEBUG] Ответ API для Гриши:`, response);
-        
-        if (response && response.data) {
-          let wheelData;
-          
-          if (Array.isArray(response.data)) {
-            wheelData = response.data;
-          } else if (response.data.data && Array.isArray(response.data.data)) {
-            wheelData = response.data.data;
-          }
-          
-          if (wheelData && wheelData.length > 0) {
-            // Сортируем по дате (новые сначала)
-            const sortedWheels = [...wheelData].sort((a, b) => {
-              if (a.date && b.date) {
-                return new Date(b.date).getTime() - new Date(a.date).getTime();
-              }
-              return 0;
-            });
-            
-            setBalanceWheels(sortedWheels);
-            
-            // Берем самое свежее колесо баланса
-            const latestWheel = sortedWheels[0];
-            setBalanceWheelData({
-              physical: latestWheel.physical || 0,
-              emotional: latestWheel.emotional || 0,
-              intellectual: latestWheel.intellectual || 0,
-              spiritual: latestWheel.spiritual || 0,
-              occupational: latestWheel.occupational || 0,
-              social: latestWheel.social || 0,
-              environmental: latestWheel.environmental || 0,
-              financial: latestWheel.financial || 0,
-            });
-            
-            setPlayersDataError(false); // Сбрасываем флаг ошибки
-            return;
-          }
-        }
-        // Если не получили данные для Гриши, продолжаем выполнение функции с общей логикой
-      }
-      
-      // Для других пользователей сначала ищем в кэше
-      if (allPlayersWheelData && Array.isArray(allPlayersWheelData)) {
-        const playerData = allPlayersWheelData.find(data => {
-          // Проверяем разные варианты сравнения ID
-          const userId = typeof data.userId === 'string' ? data.userId : String(data.userId);
-          return userId === playerId || userId.includes(playerId);
-        });
-        
-        if (playerData && playerData.wheels && playerData.wheels.length > 0) {
-          console.log(`[DEBUG] Используем кэшированные данные для игрока ${playerId}`);
-          setBalanceWheels(playerData.wheels);
-          
-          const latestWheel = playerData.wheels[0];
-          setBalanceWheelData({
-            physical: latestWheel.physical || 0,
-            emotional: latestWheel.emotional || 0,
-            intellectual: latestWheel.intellectual || 0,
-            spiritual: latestWheel.spiritual || 0,
-            occupational: latestWheel.occupational || 0,
-            social: latestWheel.social || 0,
-            environmental: latestWheel.environmental || 0,
-            financial: latestWheel.financial || 0,
-          });
-          
-          setPlayersDataError(false); // Сбрасываем флаг ошибки
-          return;
-        }
-      }
-      
-      // Если данные не найдены в кэше, делаем запрос к API
+      // Всегда делаем прямой запрос к API
       const response = await getPlayerBalanceWheels(playerId);
-      console.log(`[DEBUG] Ответ API для игрока ${playerId}:`, response);
       
       if (response && response.data) {
         let wheelData;
@@ -373,7 +253,7 @@ const StaffBalanceWheel = () => {
           
           // Берем самое свежее колесо баланса
           const latestWheel = sortedWheels[0];
-          setBalanceWheelData({
+          const updatedWheelData = {
             physical: latestWheel.physical || 0,
             emotional: latestWheel.emotional || 0,
             intellectual: latestWheel.intellectual || 0,
@@ -382,20 +262,56 @@ const StaffBalanceWheel = () => {
             social: latestWheel.social || 0,
             environmental: latestWheel.environmental || 0,
             financial: latestWheel.financial || 0,
+          };
+          
+          // Обновляем текущие данные колеса баланса
+          setBalanceWheelData(updatedWheelData);
+          
+          // Обновляем данные в общем массиве всех игроков
+          setAllPlayersWheelData(prevData => {
+            // Создаем копию, чтобы не мутировать state напрямую
+            const updatedData = [...prevData];
+            
+            // Ищем индекс игрока в массиве
+            const playerIndex = updatedData.findIndex(player => 
+              (player.userId && (player.userId === playerId || String(player.userId) === playerId)) || 
+              (player._id && (player._id === playerId || String(player._id) === playerId)) || 
+              (player.id && (player.id === playerId || String(player.id) === playerId))
+            );
+            
+            if (playerIndex !== -1) {
+              // Обновляем данные существующего игрока
+              updatedData[playerIndex] = {
+                ...updatedData[playerIndex],
+                wheels: sortedWheels
+              };
+            } else {
+              // Если игрока нет в списке, добавляем его
+              const player = players.find(p => p.id === playerId);
+              if (player) {
+                updatedData.push({
+                  userId: playerId,
+                  _id: playerId,
+                  name: player.name || 'Неизвестный игрок',
+                  wheels: sortedWheels
+                });
+              }
+            }
+            
+            return updatedData;
           });
           
-          setPlayersDataError(false); // Сбрасываем флаг ошибки
+          setPlayersDataError(false);
           return;
         }
       }
       
       // Если данные не найдены
-      console.log(`[DEBUG] Не удалось получить данные колеса баланса для игрока ${playerId}`);
       setApiError(`Не удалось получить данные колеса баланса для игрока ${playerId}`);
       setPlayersDataError(true);
       
     } catch (error) {
-      console.error(`[DEBUG] Ошибка при загрузке колеса баланса игрока ${playerId}:`, error);
+      console.error(`Ошибка при загрузке колеса баланса игрока ${playerId}:`, error);
       setApiError('Не удалось загрузить данные колеса баланса. Попробуйте позже.');
       setPlayersDataError(true);
     } finally {
@@ -406,64 +322,97 @@ const StaffBalanceWheel = () => {
   // Функция для обновления данных конкретного игрока
   const refreshPlayerData = async (playerId: string) => {
     try {
-      console.log("Обновление данных для игрока:", playerId);
       setLoading(true);
       
       const response = await getPlayerBalanceWheels(playerId);
-      console.log("Получены обновленные данные:", response);
       
-      if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
-        // Обновляем список колес баланса игрока
-        setBalanceWheels(response.data);
+      if (response && response.data) {
+        let wheelData;
         
-        // Обновляем текущие данные колеса баланса на основе последнего колеса
-        const latestWheel = response.data[0];
-        setBalanceWheelData({
-          physical: latestWheel.physical || 0,
-          emotional: latestWheel.emotional || 0,
-          intellectual: latestWheel.intellectual || 0,
-          spiritual: latestWheel.spiritual || 0,
-          occupational: latestWheel.occupational || 0,
-          social: latestWheel.social || 0,
-          environmental: latestWheel.environmental || 0,
-          financial: latestWheel.financial || 0,
-        });
+        if (Array.isArray(response.data)) {
+          wheelData = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          wheelData = response.data.data;
+        } else {
+          // Если данные в другом формате - попробуем преобразовать
+          wheelData = [response.data];
+        }
         
-        // Обновляем общие данные с новыми данными для этого игрока
-        setAllPlayersWheelData((prevData) => {
-          const updatedData = { ...prevData };
-          const playerIndex = Object.keys(updatedData).findIndex(key => key === playerId || 
-                                                                updatedData[key]?.userId === playerId ||
-                                                                updatedData[key]?._id === playerId);
-          if (playerIndex !== -1) {
-            const playerKey = Object.keys(updatedData)[playerIndex];
-            updatedData[playerKey] = {
-              ...updatedData[playerKey],
-              wheels: response.data
-            };
-          } else {
-            // Если игрока нет в списке, добавляем его
-            const player = players.find(p => p.id === playerId);
-            if (player) {
-              updatedData[playerId] = {
-                userId: playerId,
-                name: player.name,
-                wheels: response.data
-              };
+        if (wheelData && wheelData.length > 0) {
+          // Сортируем по дате (новые сначала)
+          const sortedWheels = [...wheelData].sort((a, b) => {
+            if (a.date && b.date) {
+              return new Date(b.date).getTime() - new Date(a.date).getTime();
             }
-          }
-          return updatedData;
-        });
+            return 0;
+          });
+          
+          // Обновляем список колес баланса игрока
+          setBalanceWheels(sortedWheels);
         
-        toast.success("Данные игрока обновлены");
+          // Обновляем текущие данные колеса баланса на основе последнего колеса
+          const latestWheel = sortedWheels[0];
+          const updatedWheelData = {
+            physical: latestWheel.physical || 0,
+            emotional: latestWheel.emotional || 0,
+            intellectual: latestWheel.intellectual || 0,
+            spiritual: latestWheel.spiritual || 0,
+            occupational: latestWheel.occupational || 0,
+            social: latestWheel.social || 0,
+            environmental: latestWheel.environmental || 0,
+            financial: latestWheel.financial || 0,
+          };
+          
+          setBalanceWheelData(updatedWheelData);
+        
+          // Обновляем общие данные с новыми данными для этого игрока
+          setAllPlayersWheelData(prevData => {
+            // Создаем копию, чтобы не мутировать state напрямую
+            const updatedData = [...prevData];
+            
+            // Ищем индекс игрока в массиве
+            const playerIndex = updatedData.findIndex(player => 
+              (player.userId && (player.userId === playerId || String(player.userId) === playerId)) || 
+              (player._id && (player._id === playerId || String(player._id) === playerId)) || 
+              (player.id && (player.id === playerId || String(player.id) === playerId))
+            );
+            
+            if (playerIndex !== -1) {
+              // Обновляем данные существующего игрока
+              updatedData[playerIndex] = {
+                ...updatedData[playerIndex],
+                wheels: sortedWheels
+              };
+            } else {
+              // Если игрока нет в списке, добавляем его
+              const player = players.find(p => p.id === playerId);
+              if (player) {
+                updatedData.push({
+                  userId: playerId,
+                  _id: playerId,
+                  name: player.name || 'Неизвестный игрок',
+                  wheels: sortedWheels
+                });
+              }
+            }
+            
+            return updatedData;
+          });
+        
+          setPlayersDataError(false);
+          toast.success("Данные игрока обновлены");
+        } else {
+          toast.error("Не удалось получить данные колеса баланса");
+        }
       } else {
-        toast.error("Не удалось получить данные колеса баланса");
+        toast.error("Получен пустой ответ от сервера");
       }
       
       setLastRefreshTime(Date.now());
     } catch (error) {
       console.error("Ошибка при обновлении данных игрока:", error);
       toast.error("Не удалось обновить данные игрока");
+      setPlayersDataError(true);
     } finally {
       setLoading(false);
     }
@@ -471,31 +420,33 @@ const StaffBalanceWheel = () => {
 
   const handlePlayerSelect = (value: string | null) => {
     if (!value) return;
-    console.log("[DEBUG] Выбран игрок с ID:", value);
+    
     setSelectedPlayerId(value);
     
-    // Проверяем, это ли специальный пользователь "Гриша"
-    const isGrisha = players.some(p => 
-      p.id === value && 
-      (p.name === "Гриша" || p.email === "nbl@gmail.com")
+    // Используем существующие данные из общего массива
+    const playerData = allPlayersWheelData.find(data => 
+      (data.userId && (data.userId === value || data.userId.toString() === value)) || 
+      (data._id && (data._id === value || data._id.toString() === value)) || 
+      (data.id && (data.id === value || data.id.toString() === value))
     );
     
-    // Для Гриши всегда выполняем прямой запрос к API
-    if (isGrisha) {
-      console.log("[DEBUG] Выбран особый пользователь (Гриша), выполняем принудительное обновление");
-      refreshPlayerData(value);
-      return;
-    }
-    
-    // Проверяем, прошло ли достаточно времени с последнего обновления
-    const now = Date.now();
-    const timeSinceLastRefresh = now - lastRefreshTime;
-    
-    if (timeSinceLastRefresh > 10000) { // 10 секунд
-      console.log("[DEBUG] Прошло больше 10 секунд, обновляем данные");
-      refreshPlayerData(value);
+    if (playerData && playerData.wheels && playerData.wheels.length > 0) {
+      const latestWheel = playerData.wheels[0]; // Первое колесо (самое новое)
+      setBalanceWheelData({
+        physical: latestWheel.physical || 0,
+        emotional: latestWheel.emotional || 0,
+        intellectual: latestWheel.intellectual || 0,
+        spiritual: latestWheel.spiritual || 0,
+        occupational: latestWheel.occupational || 0,
+        social: latestWheel.social || 0,
+        environmental: latestWheel.environmental || 0,
+        financial: latestWheel.financial || 0,
+      });
+      
+      // Сохраняем все колеса баланса игрока
+      setBalanceWheels(playerData.wheels);
     } else {
-      console.log("[DEBUG] Используем существующие данные");
+      // Если данные не найдены, загружаем их единожды
       forceFetchBalanceWheelForPlayer(value);
     }
   };
@@ -572,8 +523,19 @@ const StaffBalanceWheel = () => {
 
   // Функция для обновления всех данных 
   const refreshAllData = () => {
+    // Обновляем все данные
     setRefreshTrigger(prev => prev + 1);
-    toast.success("Данные обновляются");
+    
+    // Показываем уведомление о начале обновления
+    toast.info("Обновление данных...");
+    
+    // Если выбран игрок, дополнительно обновляем его данные напрямую
+    if (selectedPlayerId) {
+      // Запускаем обновление выбранного игрока
+      setTimeout(() => {
+        refreshPlayerData(selectedPlayerId);
+      }, 500); // Небольшая задержка для уменьшения нагрузки
+    }
   };
 
   // Если нет прав доступа

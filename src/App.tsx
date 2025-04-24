@@ -14,6 +14,7 @@ import BalanceWheel from "./pages/BalanceWheel";
 import StaffBalanceWheel from "./pages/StaffBalanceWheel";
 import TopPlayers from "./pages/TopPlayers";
 import Analytics from "./pages/Analytics";
+import NewAnalytics from "./pages/NewAnalytics";
 import FileStorage from "./pages/FileStorage";
 import Index from "./pages/Index";
 import Profile from "./pages/Profile";
@@ -91,7 +92,11 @@ const App = () => (
                 
                 <Route 
                   path={ROUTES.ANALYTICS} 
-                  element={<Analytics />} 
+                  element={
+                    <RouteGuard>
+                      <Analytics />
+                    </RouteGuard>
+                  } 
                 />
                 
                 <Route 
@@ -111,6 +116,11 @@ const App = () => (
                       <PlayersManagement />
                     </RouteGuard>
                   } 
+                />
+                
+                <Route 
+                  path={ROUTES.NEW_ANALYTICS} 
+                  element={<NewAnalytics />} 
                 />
               </Route>
               

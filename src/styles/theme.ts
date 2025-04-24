@@ -1,16 +1,20 @@
 // Определение цветов для темной темы по стилю black-dashboard-react
 export const COLORS = {
-  primary: "#1d8cf8",
-  success: "#00f2c3",
-  info: "#1d8cf8",
-  warning: "#ff8d72",
-  danger: "#fd5d93",
-  backgroundColor: "#1e1e2f",
-  cardBackground: "#27293d",
-  textColor: "#ffffff",
-  textColorSecondary: "#9a9a9a",
-  borderColor: "#2b3553",
-  chartColors: ["#1d8cf8", "#00f2c3", "#ff8d72", "#fd5d93", "#ba54f5"]
+  primary: "#3590FF",
+  success: "#00E396",
+  info: "#3590FF",
+  warning: "#FEB019",
+  danger: "#FF4560",
+  backgroundColor: "#111827",
+  cardBackground: "#1A202C",
+  textColor: "#FFFFFF",
+  textColorSecondary: "#A0AEC0",
+  borderColor: "#2D3748",
+  inputBackground: "#1E293B",
+  inputBorder: "#4A5568",
+  dialogBackground: "#1E293B",
+  buttonSecondary: "#2D3748",
+  chartColors: ["#3590FF", "#00E396", "#FEB019", "#FF4560", "#775DD0"]
 };
 
 // Общие стили для компонентов
