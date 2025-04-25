@@ -1,7 +1,12 @@
 import axios from "axios";
 
 // Задаем базовый URL для API
-const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
+const baseUrl = process.env.NODE_ENV === 'production' 
+  ? window.location.origin  // Используем текущий хост в продакшн
+  : 'http://localhost:5000';
+
+// Логируем используемый baseUrl при инициализации
+console.log(`[API] Используемый базовый URL API: ${baseUrl}`);
 
 /**
  * Универсальная функция для обработки ошибок API

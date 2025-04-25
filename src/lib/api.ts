@@ -18,6 +18,7 @@ export const updateApiBaseUrl = (port: number = 5000) => {
 
 // Оптимизированная функция для проверки доступных портов сервера
 const checkServerPort = async () => {
+  // Добавим порт 5002 в список проверяемых портов
   const ports = [5000, 5001, 5002];
   
   for (const port of ports) {
@@ -25,13 +26,16 @@ const checkServerPort = async () => {
       const response = await axios.get(`http://localhost:${port}/health`, { timeout: 2000 });
       if (response.status === 200) {
         updateApiBaseUrl(port);
+        console.log(`[API] Успешное подключение к серверу на порту ${port}`);
         return true;
       }
     } catch (error) {
+      console.log(`[API] Не удалось подключиться к серверу на порту ${port}`);
       // Продолжаем проверку следующего порта
     }
   }
   
+  console.error('[API] Не удалось подключиться ни к одному из серверов на портах 5000, 5001, 5002');
   return false;
 };
 

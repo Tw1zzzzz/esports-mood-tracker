@@ -150,7 +150,6 @@ export const connectFaceitAccount = async (req: AuthRequest, res: Response) => {
     }
     
     // Привязка аккаунта Faceit
-    // @ts-ignore: метод существует, но не объявлен в типах faceitService
     const result = await faceitService.connectFaceitAccount(req.user.id as string, faceitId, faceitNickname);
     
     return res.json(result);
@@ -164,7 +163,7 @@ export const connectFaceitAccount = async (req: AuthRequest, res: Response) => {
  * Поиск статистики игрока Faceit
  * @route GET /api/faceit/player/:nickname
  */
-export const getPlayerStats = async (req: AuthRequest, res: Response) => {
+export const getPlayerStats = async (req: Request, res: Response) => {
   try {
     const { nickname } = req.params;
     
@@ -173,7 +172,6 @@ export const getPlayerStats = async (req: AuthRequest, res: Response) => {
     }
     
     // Получение статистики игрока Faceit
-    // @ts-ignore: метод существует, но не объявлен в типах faceitService
     const playerStats = await faceitService.getPlayerStats(nickname);
     
     return res.json(playerStats);
@@ -184,34 +182,10 @@ export const getPlayerStats = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * Обработка OAuth редиректа от Faceit
- * @route GET /api/faceit/oauth/callback
- */
-export const faceitOauthCallback = async (req: AuthRequest, res: Response) => {
-  try {
-    const { code } = req.query;
-    
-    if (!code) {
-      return res.status(400).json({ message: 'Отсутствует код авторизации' });
-    }
-    
-    // Обработка OAuth колбэка и получение токена
-    // @ts-ignore: метод существует, но не объявлен в типах faceitService
-    const result = await faceitService.handleOauthCallback(code as string);
-    
-    // Ответ обычно перенаправляет на фронтенд с токеном
-    return res.redirect(`/auth/faceit/complete?token=${result.token}`);
-  } catch (error) {
-    console.error('Ошибка при обработке OAuth редиректа от Faceit:', error);
-    return res.status(500).json({ message: 'Не удалось обработать авторизацию Faceit' });
-  }
-};
-
-/**
  * Получение матчей игрока Faceit
  * @route GET /api/faceit/matches/:playerId
  */
-export const getPlayerMatches = async (req: AuthRequest, res: Response) => {
+export const getPlayerMatches = async (req: Request, res: Response) => {
   try {
     const { playerId } = req.params;
     const { limit, offset } = req.query;
@@ -221,7 +195,6 @@ export const getPlayerMatches = async (req: AuthRequest, res: Response) => {
     }
     
     // Получение матчей игрока Faceit
-    // @ts-ignore: метод существует, но не объявлен в типах faceitService
     const matches = await faceitService.getPlayerMatches(
       playerId,
       Number(limit) || 10,
@@ -242,6 +215,5 @@ export default {
   checkFaceitStatus,
   connectFaceitAccount,
   getPlayerStats,
-  faceitOauthCallback,
   getPlayerMatches
 }; 

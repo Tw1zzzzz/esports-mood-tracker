@@ -20,7 +20,7 @@ export const getUserStats = async (req: AuthRequest, res: Response) => {
     
     // Получаем статистику пользователя
     const stats = await analyticsService.getUserStats(
-      req.user.id as string,
+      req.user._id as string,
       fromDate,
       toDate,
       type as string
@@ -51,7 +51,7 @@ export const saveMetrics = async (req: AuthRequest, res: Response) => {
     
     // Сохраняем метрики пользователя
     const metrics = await analyticsService.savePlayerMetrics(
-      req.user.id as string,
+      req.user._id as string,
       mood,
       balanceWheel,
       matchId
@@ -77,7 +77,7 @@ export const getMetrics = async (req: AuthRequest, res: Response) => {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
     
     // Получаем метрики пользователя
-    const metrics = await analyticsService.getPlayerMetrics(req.user.id as string, limit);
+    const metrics = await analyticsService.getPlayerMetrics(req.user._id as string, limit);
     
     return res.json(metrics);
   } catch (error) {
@@ -102,7 +102,7 @@ export const getRecentMatches = async (req: AuthRequest, res: Response) => {
     
     // Получаем статистику с недавними матчами
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-    const stats = await analyticsService.getUserStats(req.user.id as string);
+    const stats = await analyticsService.getUserStats(req.user._id as string);
     
     // Возвращаем только последние матчи
     return res.json({

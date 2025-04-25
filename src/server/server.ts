@@ -24,7 +24,14 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['http://5.129.198.32', 'https://5.129.198.32', '*'] // Разрешаем доступ с указанных доменов и всех остальных в продакшн
+    : 'http://localhost:3000', // В режиме разработки только с localhost:3000
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // Разрешаем передачу куки и заголовков авторизации
+}));
 app.use(express.json());
 
 // Диагностический middleware для логирования запросов и ответов

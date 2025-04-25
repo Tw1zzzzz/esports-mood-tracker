@@ -36,6 +36,7 @@
 5. Скопируйте строку подключения, которая будет выглядеть примерно так:
    ```
    mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+	 mongodb+srv://vitalicrumin75:wnCnAwOoq6W5r6GN@cluster0.djy3pt3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
    ```
 6. Замените `<username>` и `<password>` данными, которые вы создали ранее.
 7. Добавьте имя базы данных в строку подключения после доменного имени:

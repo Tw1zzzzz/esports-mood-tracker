@@ -12,4 +12,9 @@ router.get('/oauth/callback', protect, faceitController.oauthCallback);
 router.post('/import-matches', protect, faceitController.importMatches);
 router.get('/status', protect, faceitController.checkFaceitStatus);
 
+// Маршруты для работы с Faceit API
+router.post('/connect', protect, faceitController.connectFaceitAccount);
+router.get('/player/:nickname', faceitController.getPlayerStats);
+router.get('/matches/:playerId', faceitController.getPlayerMatches);
+
 export default router; 

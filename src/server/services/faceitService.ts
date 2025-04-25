@@ -279,6 +279,190 @@ export const importMatches = async (faceitAccountId: string | Types.ObjectId): P
   }
 };
 
+/**
+ * Привязывает аккаунт Faceit к пользователю
+ * @param userId - ID пользователя
+ * @param faceitId - ID пользователя на Faceit
+ * @param faceitNickname - Никнейм пользователя на Faceit
+ * @returns Созданный или обновленный документ FaceitAccount
+ */
+export const connectFaceitAccount = async (
+  userId: string,
+  faceitId: string, 
+  faceitNickname: string
+): Promise<any> => {
+  try {
+    // Проверяем, существует ли пользователь
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error('Пользователь не найден');
+    }
+    
+    // Проверяем, существует ли уже привязка к аккаунту Faceit
+    let faceitAccount = await FaceitAccount.findOne({ userId });
+    
+    if (faceitAccount) {
+      // Обновляем существующую запись
+      faceitAccount.faceitId = faceitId;
+      await faceitAccount.save();
+      
+      return { message: 'Аккаунт Faceit успешно обновлен', faceitAccount };
+    } else {
+      // Получаем информацию о пользователе Faceit через API
+      try {
+        const playerData = await faceitApiClient.get(`/players/${faceitId}`);
+        
+        // Создаем токен с ограниченным сроком действия (1 день)
+        const tokenExpiresAt = new Date();
+        tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 1);
+        
+        // Создаем новую запись
+        faceitAccount = await FaceitAccount.create({
+          userId,
+          faceitId,
+          accessToken: 'manual-connection',
+          refreshToken: 'manual-connection',
+          tokenExpiresAt
+        });
+        
+        // Обновляем поле faceitAccountId в модели пользователя
+        await User.findByIdAndUpdate(userId, { faceitAccountId: faceitAccount._id });
+        
+        return { 
+          message: 'Аккаунт Faceit успешно привязан', 
+          faceitAccount,
+          playerData: playerData.data
+        };
+      } catch (error) {
+        console.error('Ошибка при получении данных игрока Faceit:', error);
+        throw new Error('Не удалось найти игрока с указанным ID на Faceit');
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при привязке аккаунта Faceit:', error);
+    throw new Error('Не удалось привязать аккаунт Faceit');
+  }
+};
+
+/**
+ * Обрабатывает OAuth callback от Faceit
+ * @param code - Код авторизации
+ * @returns Объект с токеном и данными пользователя
+ */
+export const handleOauthCallback = async (code: string): Promise<{ token: string }> => {
+  try {
+    const FACEIT_CLIENT_ID = process.env.FACEIT_CLIENT_ID || 'YOUR_FACEIT_CLIENT_ID';
+    const FACEIT_CLIENT_SECRET = process.env.FACEIT_CLIENT_SECRET || 'YOUR_FACEIT_CLIENT_SECRET';
+    const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/api/faceit/oauth/callback';
+    
+    // Проверяем наличие реальных значений для OAuth
+    if (FACEIT_CLIENT_ID === 'YOUR_FACEIT_CLIENT_ID' || FACEIT_CLIENT_SECRET === 'YOUR_FACEIT_CLIENT_SECRET') {
+      throw new Error('Ошибка конфигурации OAuth: клиентские данные FACEIT не настроены');
+    }
+    
+    // Обмениваем код на токены
+    const tokensData = await exchangeCodeForTokens(
+      code,
+      FACEIT_CLIENT_ID,
+      FACEIT_CLIENT_SECRET,
+      REDIRECT_URI
+    );
+    
+    // Получаем информацию о пользователе
+    const userInfo = await getUserInfo(tokensData.access_token);
+    
+    // Для простоты возвращаем токен доступа, в реальном приложении это может быть JWT
+    return { token: tokensData.access_token };
+  } catch (error) {
+    console.error('Ошибка при обработке OAuth callback:', error);
+    throw new Error('Не удалось обработать OAuth callback');
+  }
+};
+
+/**
+ * Получает статистику игрока Faceit
+ * @param nickname - Никнейм игрока на Faceit
+ * @returns Статистика игрока
+ */
+export const getPlayerStats = async (nickname: string): Promise<any> => {
+  try {
+    // Ищем игрока по никнейму
+    const playerResponse = await faceitApiClient.get('/players', {
+      params: { nickname }
+    });
+    
+    const playerId = playerResponse.data.player_id || playerResponse.data.id;
+    
+    if (!playerId) {
+      throw new Error('Игрок не найден');
+    }
+    
+    // Получаем статистику игрока
+    const statsResponse = await faceitApiClient.get(`/players/${playerId}/stats/csgo`);
+    
+    return {
+      player: playerResponse.data,
+      stats: statsResponse.data
+    };
+  } catch (error) {
+    console.error('Ошибка при получении статистики игрока Faceit:', error);
+    throw new Error('Не удалось получить статистику игрока Faceit');
+  }
+};
+
+/**
+ * Получает матчи игрока Faceit
+ * @param playerId - ID игрока на Faceit
+ * @param limit - Лимит матчей (по умолчанию 10)
+ * @param offset - Смещение (по умолчанию 0)
+ * @returns Список матчей игрока
+ */
+export const getPlayerMatches = async (
+  playerId: string,
+  limit: number = 10,
+  offset: number = 0
+): Promise<any> => {
+  try {
+    // Получаем историю матчей игрока
+    const matchesResponse = await faceitApiClient.get(`/players/${playerId}/history`, {
+      params: { 
+        limit,
+        offset,
+        game: 'csgo'
+      }
+    });
+    
+    const matches = matchesResponse.data.items || [];
+    
+    // Получаем детали каждого матча
+    const matchesWithDetails = await Promise.all(
+      matches.map(async (match: any) => {
+        try {
+          const matchDetails = await getMatchDetails(match.match_id);
+          const matchStats = await getMatchStats(match.match_id);
+          
+          return {
+            ...match,
+            details: matchDetails,
+            stats: matchStats
+          };
+        } catch (error) {
+          console.error(`Ошибка при получении деталей матча ${match.match_id}:`, error);
+          return match;
+        }
+      })
+    );
+    
+    return {
+      items: matchesWithDetails,
+      total: matchesResponse.data.total || matches.length
+    };
+  } catch (error) {
+    console.error('Ошибка при получении матчей игрока Faceit:', error);
+    throw new Error('Не удалось получить матчи игрока Faceit');
+  }
+};
+
 export default {
   initOAuth,
   exchangeCodeForTokens,
@@ -288,5 +472,9 @@ export default {
   getMatchDetails,
   getMatchStats,
   saveFaceitAccount,
-  importMatches
+  importMatches,
+  connectFaceitAccount,
+  handleOauthCallback,
+  getPlayerStats,
+  getPlayerMatches
 }; 
