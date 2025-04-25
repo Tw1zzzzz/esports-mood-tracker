@@ -1,10 +1,13 @@
 import express from 'express';
+import { Router } from 'express';
 import User from '../models/User';
 import MoodEntry from '../models/MoodEntry';
 import TestEntry from '../models/TestEntry';
-import { protect, isStaff } from '../middleware/auth';
+import { protect } from '../middleware/authMiddleware';
+import { isStaff } from '../middleware/auth';
+import userController from '../controllers/userController';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Get all players (staff only)
 router.get('/players', protect, isStaff, async (_req: any, res) => {
@@ -216,5 +219,8 @@ router.delete('/players/:id/complete', protect, isStaff, async (req, res) => {
     });
   }
 });
+
+// Получение профиля пользователя
+router.get('/me', protect, userController.getUserProfile);
 
 export default router; 

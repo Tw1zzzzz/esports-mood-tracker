@@ -9,7 +9,7 @@ import { AuthRequest, BaseAuthRequest, UserData } from './types';
  * @param res Ответ
  * @param next Следующий обработчик
  */
-export const protect = async (req: BaseAuthRequest, res: Response, next: NextFunction) => {
+export const protect = async (req: BaseAuthRequest, res: Response, next: NextFunction): Promise<void | Response> => {
   try {
     let token;
 
@@ -52,10 +52,12 @@ export const protect = async (req: BaseAuthRequest, res: Response, next: NextFun
         role: user.role,
         isAdmin: user.isAdmin,
         isStaff: user.isStaff,
-        faceitAccountId: user.faceitAccountId
+        faceitAccountId: user.faceitAccountId,
+        id: user._id.toString() // Для обратной совместимости
       };
       
       next();
+      return;
     } catch (error) {
       console.error('[Auth Middleware] Ошибка верификации токена:', error);
       return res.status(401).json({ message: 'Не авторизован, недействительный токен' });
@@ -74,7 +76,7 @@ export const protect = async (req: BaseAuthRequest, res: Response, next: NextFun
  * @param roles Массив разрешенных ролей
  */
 export const authorize = (roles: string[] = []) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return (req: AuthRequest, res: Response, next: NextFunction): Response | void => {
     try {
       // Проверка наличия пользователя
       if (!req.user) {
@@ -83,7 +85,8 @@ export const authorize = (roles: string[] = []) => {
 
       // Если роли не указаны, разрешаем доступ всем аутентифицированным пользователям
       if (roles.length === 0) {
-        return next();
+        next();
+        return;
       }
 
       // Проверка роли пользователя
@@ -94,6 +97,7 @@ export const authorize = (roles: string[] = []) => {
       }
 
       next();
+      return;
     } catch (error) {
       console.error('[Auth Middleware] Ошибка в middleware авторизации:', error);
       return res.status(500).json({ 
@@ -108,7 +112,7 @@ export const authorize = (roles: string[] = []) => {
  * Middleware для базовой авторизации без доступа к модели User
  * Используется для маршрутов, которым не требуется полная модель пользователя
  */
-export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextFunction) => {
+export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextFunction): Promise<void | Response> => {
   try {
     let token;
 
@@ -137,6 +141,7 @@ export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextF
       // Добавление пользователя в запрос
       req.user = decoded;
       next();
+      return;
     } catch (error) {
       console.error('[Auth Middleware] Ошибка верификации токена:', error);
       return res.status(401).json({ message: 'Не авторизован, недействительный токен' });
@@ -156,7 +161,7 @@ export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextF
  * @param res Ответ
  * @param next Следующий обработчик
  */
-export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const admin = (req: AuthRequest, res: Response, next: NextFunction): Response | void => {
   if (!req.user) {
     return res.status(401).json({ message: 'Не авторизован' });
   }
@@ -168,6 +173,7 @@ export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
   }
   
   next();
+  return;
 };
 
 /**
@@ -176,9 +182,10 @@ export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
  * @param res Ответ Express
  * @param next Функция для перехода к следующему middleware
  */
-export const staff = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const staff = (req: AuthRequest, res: Response, next: NextFunction): Response | void => {
   if (req.user && (req.user.isAdmin || req.user.isStaff)) {
-    return next();
+    next();
+    return;
   } else {
     return res.status(403).json({ message: 'Нет доступа, требуются права сотрудника' });
   }
@@ -190,10 +197,11 @@ export const staff = (req: AuthRequest, res: Response, next: NextFunction) => {
  * @param res Ответ
  * @param next Следующий обработчик
  */
-export const isStaff = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const isStaff = (req: AuthRequest, res: Response, next: NextFunction): Response | void => {
   if (req.user && req.user.isStaff) {
     console.log('[Auth Middleware] Доступ сотрудника предоставлен для:', req.user._id);
     next();
+    return;
   } else {
     console.log('[Auth Middleware] Доступ запрещен - требуются права сотрудника');
     return res.status(403).json({ message: 'Доступ запрещен, требуются права сотрудника' });

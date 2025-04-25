@@ -32,6 +32,7 @@ export interface UserData {
   isAdmin: boolean;
   isStaff: boolean;
   faceitAccountId?: string | null;
+  id?: string; // Для обратной совместимости
 }
 
 /**
@@ -43,6 +44,7 @@ export interface BaseAuthRequest extends Request {
 
 /**
  * Расширенный запрос с гарантированной аутентификацией
+ * Расширяет базовый Request из Express, который может использоваться в маршрутах
  */
 export interface AuthRequest extends Request {
   user: UserData;

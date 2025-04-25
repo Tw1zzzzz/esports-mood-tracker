@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import User from '../models/User';
 import { AuthRequest } from './types';
+import { UserData } from './types';
 
 interface JwtPayload {
   id: string;
@@ -10,94 +11,107 @@ interface JwtPayload {
 /**
  * Middleware для защиты маршрутов, требующих аутентификации
  */
-export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const protect = (req: Request, res: Response, next: NextFunction): Response | void => {
   try {
-    let token: string | undefined;
+    // Получение токена из заголовка
+    const token = req.header('Authorization')?.replace('Bearer ', '');
     
-    // Проверяем токен в заголовке Authorization
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    } 
-    // Проверяем токен в cookie
-    else if (req.cookies.token) {
-      token = req.cookies.token;
-    }
-    
-    // Если токен не найден, возвращаем ошибку
     if (!token) {
-      console.log('[Auth] Доступ запрещен: нет токена');
-      return res.status(401).json({ message: 'Нет доступа, требуется авторизация' });
+      return res.status(401).json({ message: 'Требуется авторизация' });
     }
     
-    // Верифицируем токен
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as jwt.JwtPayload;
+    // Верификация токена
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecretkey') as UserData;
     
-    // Получаем пользователя из базы данных по ID из токена
-    const user = await User.findById(decoded.id).select('-password');
-    
-    if (!user) {
-      console.log('[Auth] Доступ запрещен: пользователь не найден');
-      return res.status(401).json({ message: 'Пользователь не найден' });
-    }
-    
-    // Добавляем пользователя к объекту запроса
-    req.user = user;
+    // Добавление информации о пользователе в запрос
+    req.user = decoded;
     
     next();
+    return;
   } catch (error) {
-    console.error('[Auth] Ошибка аутентификации:', error);
-    
-    if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({ message: 'Недействительный токен' });
+    console.error('Ошибка аутентификации:', error);
+    return res.status(401).json({ message: 'Ошибка аутентификации' });
+  }
+};
+
+/**
+ * Middleware для проверки прав администратора
+ * @param req Запрос
+ * @param res Ответ
+ * @param next Функция перехода к следующему middleware
+ */
+export const admin = (req: Request, res: Response, next: NextFunction): Response | void => {
+  try {
+    // Проверка наличия пользователя в запросе (должен быть установлен auth middleware)
+    if (!req.user) {
+      return res.status(401).json({ message: 'Требуется авторизация' });
     }
     
-    if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ message: 'Срок действия токена истек' });
+    // Проверка прав администратора
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ message: 'Доступ запрещен. Требуются права администратора' });
     }
     
-    res.status(500).json({ 
-      message: 'Ошибка аутентификации',
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-    });
+    next();
+    return;
+  } catch (error) {
+    console.error('Ошибка авторизации:', error);
+    return res.status(500).json({ message: 'Ошибка авторизации' });
+  }
+};
+
+/**
+ * Middleware для проверки прав сотрудника
+ * @param req Запрос
+ * @param res Ответ
+ * @param next Функция перехода к следующему middleware
+ */
+export const isStaff = (req: Request, res: Response, next: NextFunction): Response | void => {
+  try {
+    // Проверка наличия пользователя в запросе
+    if (!req.user) {
+      return res.status(401).json({ message: 'Требуется авторизация' });
+    }
+    
+    // Проверка, является ли пользователь сотрудником или администратором
+    if (!req.user.isStaff && !req.user.isAdmin) {
+      return res.status(403).json({ message: 'Доступ запрещен. Требуются права сотрудника' });
+    }
+    
+    next();
+    return;
+  } catch (error) {
+    console.error('Ошибка авторизации:', error);
+    return res.status(500).json({ message: 'Ошибка авторизации' });
   }
 };
 
 /**
  * Middleware для ограничения доступа по ролям
+ * @param roles Массив разрешенных ролей
  */
 export const restrictTo = (...roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    // Проверяем, есть ли пользователь в запросе
+  return (req: Request, res: Response, next: NextFunction): Response | void => {
+    // Проверка наличия пользователя
     if (!req.user) {
-      return res.status(401).json({ message: 'Нет доступа, требуется авторизация' });
+      return res.status(401).json({ message: 'Требуется авторизация' });
     }
     
-    // Проверяем, имеет ли пользователь необходимую роль
+    // Проверка роли пользователя
     if (!roles.includes(req.user.role)) {
-      console.log(`[Auth] Отказано в доступе пользователю: ${req.user.email} с ролью: ${req.user.role}`);
-      return res.status(403).json({ message: 'У вас нет прав для выполнения этого действия' });
+      return res.status(403).json({ 
+        message: `Доступ запрещен. Требуются роли: ${roles.join(', ')}` 
+      });
     }
     
     next();
+    return;
   };
-};
-
-/**
- * Middleware для проверки прав администратора
- * Должен использоваться после middleware protect
- */
-export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.user && req.user.role === 'admin') {
-    console.log(`[AuthMiddleware] Пользователь ${req.user.name} имеет права администратора`);
-    next();
-  } else {
-    console.log('[AuthMiddleware] Доступ запрещен, требуются права администратора');
-    return res.status(403).json({ message: 'Доступ запрещен, требуются права администратора' });
-  }
 };
 
 export default {
   protect,
   admin,
+  isStaff,
   restrictTo
 }; 
