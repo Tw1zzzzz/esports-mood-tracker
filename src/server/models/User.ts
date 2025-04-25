@@ -33,6 +33,22 @@ const userSchema = new Schema<IUser>(
     isAdmin: {
       type: Boolean,
       default: false
+    },
+    isStaff: {
+      type: Boolean,
+      default: false
+    },
+    faceitAccountId: {
+      type: String,
+      default: null
+    },
+    completedTests: {
+      type: [String],
+      default: []
+    },
+    completedBalanceWheel: {
+      type: Boolean,
+      default: false
     }
   },
   {

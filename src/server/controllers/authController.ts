@@ -1,256 +1,260 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
 import User from '../models/User';
-import { AuthRequest } from '../middleware/types';
+import { AuthRequest, UserData } from '../middleware/types';
 import bcrypt from 'bcryptjs';
 
-// Утилита для генерации JWT токена
-const generateToken = (id: string): string => {
-  const secret = process.env.JWT_SECRET || 'your-secret-key';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '30d';
-  
-  return jwt.sign({ id }, secret as jwt.Secret, {
-    expiresIn,
-  });
-};
-
-// Функция для установки токена в cookie
-const setTokenCookie = (res: Response, token: string): void => {
-  const cookieOptions = {
-    expires: new Date(
-      Date.now() + (parseInt(process.env.JWT_COOKIE_EXPIRES_IN || '30') * 24 * 60 * 60 * 1000)
-    ),
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const
-  };
-  
-  res.cookie('token', token, cookieOptions);
+// HTTP статус коды
+export const HTTP_STATUS_CODES = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500
 };
 
 /**
- * @desc    Регистрация нового пользователя
- * @route   POST /api/auth/register
- * @access  Public
+ * Генерация JWT токена для пользователя
  */
-export const registerUser = async (req: Request, res: Response) => {
-  try {
-    const { name, email, password } = req.body;
-
-    // Проверка наличия обязательных полей
-    if (!name || !email || !password) {
-      return res.status(400).json({ 
-        message: 'Пожалуйста, заполните все поля' 
-      });
-    }
-
-    // Проверка существования пользователя
-    const userExists = await User.findOne({ email });
-
-    if (userExists) {
-      return res.status(400).json({ 
-        message: 'Пользователь с таким email уже существует' 
-      });
-    }
-
-    // Создание пользователя
-    const user = await User.create({
-      name,
-      email,
-      password
-    });
-
-    if (user) {
-      // Генерация токена
-      const token = generateToken(user._id);
-
-      // Установка cookie с токеном
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 дней
-      });
-
-      // Отправка ответа с данными пользователя
-      res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
-        token
-      });
-    } else {
-      res.status(400).json({ message: 'Неверные данные пользователя' });
-    }
-  } catch (error) {
-    console.error('[Auth Controller] Ошибка регистрации:', error);
-    res.status(500).json({ 
-      message: 'Ошибка сервера при регистрации',
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-    });
-  }
-};
-
-/**
- * @desc    Аутентификация пользователя и получение токена
- * @route   POST /api/auth/login
- * @access  Public
- */
-export const loginUser = async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
-
-    // Проверка наличия обязательных полей
-    if (!email || !password) {
-      return res.status(400).json({ 
-        message: 'Пожалуйста, введите email и пароль' 
-      });
-    }
-
-    // Поиск пользователя по email и включение пароля в результат
-    const user = await User.findOne({ email }).select('+password');
-
-    // Если пользователь не найден или пароль неверный
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ message: 'Неверный email или пароль' });
-    }
-
-    // Генерация токена
-    const token = generateToken(user._id);
-
-    // Установка cookie с токеном
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 дней
-    });
-
-    // Отправка ответа с данными пользователя (без пароля)
-    res.json({
+const generateToken = (user: UserData): string => {
+  return jwt.sign(
+    { 
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
       isAdmin: user.isAdmin,
-      token
-    });
-  } catch (error) {
-    console.error('[Auth Controller] Ошибка входа:', error);
-    res.status(500).json({ 
-      message: 'Ошибка сервера при входе',
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-    });
-  }
+      isStaff: user.isStaff,
+      faceitAccountId: user.faceitAccountId
+    },
+    process.env.JWT_SECRET || 'defaultsecretkey',
+    { expiresIn: '30d' }
+  );
 };
 
 /**
- * @desc    Выход пользователя (очистка cookie)
- * @route   POST /api/auth/logout
- * @access  Private
+ * Регистрация нового пользователя
+ * @route POST /api/auth/register
  */
-export const logoutUser = (req: Request, res: Response) => {
+export const registerUser = async (req: Request, res: Response) => {
   try {
-    // Очистка cookie с токеном
-    res.cookie('token', '', {
-      httpOnly: true,
-      expires: new Date(0)
+    const { name, email, password } = req.body;
+
+    // Проверка, существует ли уже пользователь
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(HTTP_STATUS_CODES.BAD_REQUEST).json({
+        success: false,
+        message: 'Пользователь с таким email уже существует'
+      });
+    }
+
+    // Создание нового пользователя
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: 'user',
+      isAdmin: false,
+      isStaff: false
     });
 
-    res.json({ message: 'Выход выполнен успешно' });
+    if (user) {
+      // Формирование данных пользователя для токена
+      const userData: UserData = {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        isStaff: user.isStaff,
+        faceitAccountId: user.faceitAccountId
+      };
+
+      // Возвращаем успешный ответ с токеном
+      return res.status(HTTP_STATUS_CODES.CREATED).json({
+        success: true,
+        token: generateToken(userData),
+        user: userData
+      });
+    } else {
+      return res.status(HTTP_STATUS_CODES.BAD_REQUEST).json({
+        success: false,
+        message: 'Невозможно создать пользователя'
+      });
+    }
   } catch (error) {
-    console.error('[Auth Controller] Ошибка выхода:', error);
-    res.status(500).json({ 
-      message: 'Ошибка сервера при выходе',
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    console.error('Ошибка при регистрации:', error);
+    return res.status(HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Ошибка при регистрации пользователя',
+      error: (error as Error).message
     });
   }
 };
 
 /**
- * @desc    Получение профиля пользователя
- * @route   GET /api/auth/profile
- * @access  Private
+ * Аутентификация пользователя
+ * @route POST /api/auth/login
+ */
+export const loginUser = async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    // Проверка наличия email и пароля
+    if (!email || !password) {
+      return res.status(HTTP_STATUS_CODES.BAD_REQUEST).json({
+        success: false,
+        message: 'Пожалуйста, введите email и пароль'
+      });
+    }
+
+    // Поиск пользователя в базе
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(HTTP_STATUS_CODES.UNAUTHORIZED).json({
+        success: false,
+        message: 'Неверный email или пароль'
+      });
+    }
+
+    // Проверка пароля
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(HTTP_STATUS_CODES.UNAUTHORIZED).json({
+        success: false,
+        message: 'Неверный email или пароль'
+      });
+    }
+
+    // Формирование данных пользователя для токена
+    const userData: UserData = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isAdmin: user.isAdmin,
+      isStaff: user.isStaff,
+      faceitAccountId: user.faceitAccountId
+    };
+
+    // Возвращаем успешный ответ с токеном
+    return res.status(HTTP_STATUS_CODES.OK).json({
+      success: true,
+      token: generateToken(userData),
+      user: userData
+    });
+  } catch (error) {
+    console.error('Ошибка при входе:', error);
+    return res.status(HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Ошибка при аутентификации',
+      error: (error as Error).message
+    });
+  }
+};
+
+/**
+ * Выход пользователя (инвалидация токена)
+ * @route POST /api/auth/logout
+ */
+export const logoutUser = async (req: Request, res: Response) => {
+  try {
+    // В JWT аутентификации выход обычно реализуется на стороне клиента
+    // путем удаления токена. Здесь просто возвращаем успешный ответ.
+    return res.status(HTTP_STATUS_CODES.OK).json({
+      success: true,
+      message: 'Выход выполнен успешно'
+    });
+  } catch (error) {
+    console.error('Ошибка при выходе:', error);
+    return res.status(HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Ошибка при выходе из системы',
+      error: (error as Error).message
+    });
+  }
+};
+
+/**
+ * Получение профиля пользователя
+ * @route GET /api/auth/profile
  */
 export const getUserProfile = async (req: AuthRequest, res: Response) => {
   try {
-    // Проверка наличия пользователя в запросе
-    if (!req.user) {
-      return res.status(401).json({ message: 'Не авторизован' });
+    const user = await User.findById(req.user._id).select('-password');
+    
+    if (!user) {
+      return res.status(HTTP_STATUS_CODES.NOT_FOUND).json({
+        success: false,
+        message: 'Пользователь не найден'
+      });
     }
 
-    // Получение и отправка данных пользователя
-    res.json({
-      _id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role,
-      isAdmin: req.user.isAdmin
+    return res.status(HTTP_STATUS_CODES.OK).json({
+      success: true,
+      user
     });
   } catch (error) {
-    console.error('[Auth Controller] Ошибка получения профиля:', error);
-    res.status(500).json({ 
-      message: 'Ошибка сервера при получении профиля',
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    console.error('Ошибка при получении профиля:', error);
+    return res.status(HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Ошибка при получении профиля пользователя',
+      error: (error as Error).message
     });
   }
 };
 
 /**
- * @desc    Обновление профиля пользователя
- * @route   PUT /api/auth/profile
- * @access  Private
+ * Обновление профиля пользователя
+ * @route PUT /api/auth/profile
  */
 export const updateUserProfile = async (req: AuthRequest, res: Response) => {
   try {
-    // Проверка наличия пользователя в запросе
-    if (!req.user) {
-      return res.status(401).json({ message: 'Не авторизован' });
-    }
-
-    // Поиск пользователя для обновления
     const user = await User.findById(req.user._id);
-
+    
     if (!user) {
-      return res.status(404).json({ message: 'Пользователь не найден' });
+      return res.status(HTTP_STATUS_CODES.NOT_FOUND).json({
+        success: false,
+        message: 'Пользователь не найден'
+      });
     }
 
-    // Обновление полей
+    // Обновляем только те поля, которые были предоставлены
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
-
-    // Обновление пароля, если он предоставлен
+    
+    // Обновляем пароль только если он был предоставлен
     if (req.body.password) {
       user.password = req.body.password;
     }
 
-    // Сохранение обновленного пользователя
     const updatedUser = await user.save();
 
-    // Генерация нового токена
-    const token = generateToken(updatedUser._id);
-
-    // Установка cookie с новым токеном
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 дней
-    });
-
-    // Отправка обновленных данных
-    res.json({
+    // Формируем данные пользователя для ответа
+    const userData: UserData = {
       _id: updatedUser._id,
       name: updatedUser.name,
       email: updatedUser.email,
       role: updatedUser.role,
       isAdmin: updatedUser.isAdmin,
-      token
+      isStaff: updatedUser.isStaff,
+      faceitAccountId: updatedUser.faceitAccountId
+    };
+
+    return res.status(HTTP_STATUS_CODES.OK).json({
+      success: true,
+      token: generateToken(userData),
+      user: userData
     });
   } catch (error) {
-    console.error('[Auth Controller] Ошибка обновления профиля:', error);
-    res.status(500).json({ 
-      message: 'Ошибка сервера при обновлении профиля',
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    console.error('Ошибка при обновлении профиля:', error);
+    return res.status(HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Ошибка при обновлении профиля пользователя',
+      error: (error as Error).message
     });
   }
 };

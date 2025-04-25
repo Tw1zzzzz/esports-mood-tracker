@@ -9,7 +9,7 @@ import { AuthRequest, BaseAuthRequest, UserData } from './types';
  * @param res Ответ
  * @param next Следующий обработчик
  */
-export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const protect = async (req: BaseAuthRequest, res: Response, next: NextFunction) => {
   try {
     let token;
 
@@ -34,18 +34,27 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       // Верификация токена
       const decoded = jwt.verify(
         token, 
-        process.env.JWT_SECRET || 'your-secret-key'
-      ) as { id: string };
+        process.env.JWT_SECRET || 'defaultsecretkey'
+      ) as UserData;
 
       // Поиск пользователя по ID из токена
-      const user = await User.findById(decoded.id).select('-password');
+      const user = await User.findById(decoded._id).select('-password');
 
       if (!user) {
         return res.status(401).json({ message: 'Пользователь не найден' });
       }
 
       // Добавление пользователя в запрос
-      req.user = user;
+      req.user = {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        isStaff: user.isStaff,
+        faceitAccountId: user.faceitAccountId
+      };
+      
       next();
     } catch (error) {
       console.error('[Auth Middleware] Ошибка верификации токена:', error);
@@ -53,7 +62,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
     }
   } catch (error) {
     console.error('[Auth Middleware] Ошибка в защитном middleware:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       message: 'Внутренняя ошибка сервера',
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     });
@@ -87,7 +96,7 @@ export const authorize = (roles: string[] = []) => {
       next();
     } catch (error) {
       console.error('[Auth Middleware] Ошибка в middleware авторизации:', error);
-      res.status(500).json({ 
+      return res.status(500).json({ 
         message: 'Внутренняя ошибка сервера',
         error: error instanceof Error ? error.message : 'Неизвестная ошибка'
       });
@@ -122,11 +131,11 @@ export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextF
       // Верификация токена
       const decoded = jwt.verify(
         token, 
-        process.env.JWT_SECRET || 'your-secret-key'
-      ) as { id: string };
+        process.env.JWT_SECRET || 'defaultsecretkey'
+      ) as UserData;
 
-      // Добавление userId в запрос
-      req.user = { _id: decoded.id, id: decoded.id };
+      // Добавление пользователя в запрос
+      req.user = decoded;
       next();
     } catch (error) {
       console.error('[Auth Middleware] Ошибка верификации токена:', error);
@@ -134,7 +143,7 @@ export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextF
     }
   } catch (error) {
     console.error('[Auth Middleware] Ошибка в базовом middleware авторизации:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       message: 'Внутренняя ошибка сервера',
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     });
@@ -168,16 +177,21 @@ export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
  * @param next Функция для перехода к следующему middleware
  */
 export const staff = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.user && (req.user.isAdmin || req.user.role === 'staff')) {
+  if (req.user && (req.user.isAdmin || req.user.isStaff)) {
     return next();
   } else {
     return res.status(403).json({ message: 'Нет доступа, требуются права сотрудника' });
   }
 };
 
-// Middleware для проверки прав администратора
-export const isStaff = (req: any, res: any, next: any) => {
-  if (req.user && req.user.role === 'staff') {
+/**
+ * Middleware для проверки прав сотрудника
+ * @param req Запрос
+ * @param res Ответ
+ * @param next Следующий обработчик
+ */
+export const isStaff = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user && req.user.isStaff) {
     console.log('[Auth Middleware] Доступ сотрудника предоставлен для:', req.user._id);
     next();
   } else {

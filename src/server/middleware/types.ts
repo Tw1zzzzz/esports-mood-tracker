@@ -3,41 +3,73 @@ import mongoose from 'mongoose';
 import { Document } from 'mongoose';
 
 /**
- * Интерфейс пользователя из MongoDB
+ * Интерфейс пользователя для базы данных
  */
 export interface IUser extends Document {
-  _id: string;
-  id: string;
   name: string;
   email: string;
   password: string;
   role: string;
   isAdmin: boolean;
+  isStaff: boolean;
+  faceitAccountId: string | null;
+  completedTests: string[];
+  completedBalanceWheel: boolean;
+  comparePassword(password: string): Promise<boolean>;
+  matchPassword(password: string): Promise<boolean>;
   createdAt: Date;
   updatedAt: Date;
-  comparePassword: (password: string) => Promise<boolean>;
 }
 
 /**
- * Базовые данные пользователя для маршрутов без полной модели
+ * Данные пользователя для токенов и ответов API
  */
 export interface UserData {
-  _id: string;
-  id: string;
+  _id: mongoose.Schema.Types.ObjectId | string;
+  name: string;
+  email: string;
+  role: string;
+  isAdmin: boolean;
+  isStaff: boolean;
+  faceitAccountId?: string | null;
 }
 
 /**
- * Расширение интерфейса запроса с пользователем для авторизованных маршрутов
- */
-export interface AuthRequest extends Request {
-  user?: IUser;
-}
-
-/**
- * Расширение интерфейса запроса с базовой информацией о пользователе
+ * Базовый запрос с опциональной аутентификацией
  */
 export interface BaseAuthRequest extends Request {
   user?: UserData;
+}
+
+/**
+ * Расширенный запрос с гарантированной аутентификацией
+ */
+export interface AuthRequest extends Request {
+  user: UserData;
+}
+
+/**
+ * Расширенный интерфейс для аутентифицированных запросов администратора
+ */
+export interface AdminRequest extends Request {
+  user: UserData & { isAdmin: true };
+}
+
+/**
+ * Тип для ответа с токеном
+ */
+export interface TokenResponse {
+  token: string;
+  user: UserData;
+}
+
+/**
+ * Статусы аутентификации
+ */
+export enum AuthStatus {
+  SUCCESS = 'success',
+  ERROR = 'error',
+  UNAUTHORIZED = 'unauthorized'
 }
 
 // Для обратной совместимости
@@ -59,16 +91,7 @@ export interface BaseUserRequest extends Request {
 declare global {
   namespace Express {
     interface Request {
-      user?: UserData | any;
+      user?: UserData;
     }
   }
-}
-
-// Базовый интерфейс для запросов, которым требуется только id и faceitAccountId
-export interface BaseAuthRequest extends Request {
-  user?: {
-    id?: string;
-    _id?: mongoose.Types.ObjectId;
-    faceitAccountId?: string | mongoose.Types.ObjectId;
-  } | UserData | any;
 } 
