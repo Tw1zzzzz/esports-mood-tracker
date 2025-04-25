@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npx kill-port 5000 && concurrently \"vite\" \"npm:server:dev\"",
     "dev:react-devtools": "react-devtools",
-    "build": "vite build",
+    "build": "vite build && npm run server:build",
     "build:dev": "vite build --mode development",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
@@ -14,7 +14,9 @@
     "server:start": "cd src/server && npm run start",
     "server:dev": "cd src/server && npm run dev",
     "server:build": "cd src/server && npm run build",
-    "seed": "cd src/server && npx ts-node seed.ts"
+    "seed": "cd src/server && npx ts-node seed.ts",
+    "vercel-build": "npm run build",
+    "postinstall": "npm run server:install"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

@@ -4,7 +4,14 @@ const connectDB = async () => {
   try {
     console.log('Attempting to connect to MongoDB...');
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/esports-mood-tracker';
-    console.log('MongoDB URI:', uri);
+    console.log('MongoDB URI:', uri.replace(/mongodb\+srv:\/\/([^:]+):[^@]+@/, 'mongodb+srv://$1:****@'));
+
+    const options = {
+      retryWrites: true,
+      w: 'majority',
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+    };
 
     const conn = await mongoose.connect(uri);
     
