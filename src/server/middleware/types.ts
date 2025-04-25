@@ -1,27 +1,47 @@
 import { Request } from 'express';
 import mongoose from 'mongoose';
+import { Document } from 'mongoose';
 
 /**
- * Интерфейс для пользовательских данных
+ * Интерфейс пользователя из MongoDB
+ */
+export interface IUser extends Document {
+  _id: string;
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+  isAdmin: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword: (password: string) => Promise<boolean>;
+}
+
+/**
+ * Базовые данные пользователя для маршрутов без полной модели
  */
 export interface UserData {
-  _id: string | mongoose.Types.ObjectId;
-  id?: string;
-  name?: string;
-  role?: 'staff' | 'player';
-  faceitAccountId?: string | mongoose.Types.ObjectId;
-  avatar?: string;
-  email?: string;
-  // Другие поля пользователя
+  _id: string;
+  id: string;
 }
 
 /**
- * Расширенный интерфейс для Express.Request с пользовательскими данными
- * для запросов требующих аутентификации
+ * Расширение интерфейса запроса с пользователем для авторизованных маршрутов
  */
 export interface AuthRequest extends Request {
-  user: UserData | any; // Поддерживаем любой тип данных для обратной совместимости
+  user?: IUser;
 }
+
+/**
+ * Расширение интерфейса запроса с базовой информацией о пользователе
+ */
+export interface BaseAuthRequest extends Request {
+  user?: UserData;
+}
+
+// Для обратной совместимости
+export type UserDocument = IUser;
 
 /**
  * Базовый интерфейс для запросов, требующих информацию о пользователе
@@ -46,7 +66,7 @@ declare global {
 
 // Базовый интерфейс для запросов, которым требуется только id и faceitAccountId
 export interface BaseAuthRequest extends Request {
-  user: {
+  user?: {
     id?: string;
     _id?: mongoose.Types.ObjectId;
     faceitAccountId?: string | mongoose.Types.ObjectId;

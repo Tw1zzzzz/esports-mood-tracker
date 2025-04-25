@@ -186,66 +186,80 @@ export const uploadFile = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Не авторизован' });
     }
 
-    upload(req as Request, res, async (err) => {
-      if (err) {
-        console.error('Ошибка при загрузке файла:', err);
-        return res.status(400).json({ message: 'Ошибка при загрузке файла' });
-      }
-      
-      if (!req.file) {
-        return res.status(400).json({ message: 'Файл не найден' });
-      }
-      
-      const { originalname, filename, path: filePath, size, mimetype } = req.file;
-      const { folderId } = req.body;
-      
-      // Проверяем, существует ли файл с таким именем в той же папке
-      const filter: any = { name: originalname, owner: req.user!._id }; // Используем owner вместо user
-      if (folderId) {
-        filter.folder = folderId;
-      } else {
-        filter.folder = null;
-      }
-      
-      const existingFile = await File.findOne(filter);
-      if (existingFile) {
-        // Удаляем загруженный файл
-        fs.unlinkSync(filePath);
-        return res.status(400).json({ message: 'Файл с таким именем уже существует' });
-      }
-      
-      // Проверяем существование папки, если указана
-      if (folderId) {
-        const folder = await Folder.findById(folderId);
-        if (!folder) {
-          // Удаляем загруженный файл
-          fs.unlinkSync(filePath);
-          return res.status(400).json({ message: 'Папка не найдена' });
+    return new Promise<void>((resolve, reject) => {
+      upload(req as Request, res, async (err) => {
+        if (err) {
+          console.error('Ошибка при загрузке файла:', err);
+          res.status(400).json({ message: 'Ошибка при загрузке файла' });
+          return resolve();
         }
         
-        // Проверяем, принадлежит ли папка текущему пользователю
-        if (folder.user.toString() !== req.user!._id.toString() && !req.user!.isStaff) {
-          // Удаляем загруженный файл
-          fs.unlinkSync(filePath);
-          return res.status(403).json({ message: 'Нет доступа к папке' });
+        if (!req.file) {
+          res.status(400).json({ message: 'Файл не найден' });
+          return resolve();
         }
-      }
-      
-      // Создаем запись о файле в базе данных
-      const file = new File({
-        name: originalname,
-        filename,
-        path: filePath,
-        size,
-        mimeType: mimetype, // Используем mimeType вместо mimetype
-        folder: folderId || null,
-        owner: req.user!._id, // Используем owner вместо user
-        type: 'file' // Добавляем тип, если он требуется для File модели
+        
+        const { originalname, filename, path: filePath, size, mimetype } = req.file;
+        const { folderId } = req.body;
+        
+        try {
+          // Проверяем, существует ли файл с таким именем в той же папке
+          const filter: any = { name: originalname, owner: req.user!._id }; // Используем owner вместо user
+          if (folderId) {
+            filter.folder = folderId;
+          } else {
+            filter.folder = null;
+          }
+          
+          const existingFile = await File.findOne(filter);
+          if (existingFile) {
+            // Удаляем загруженный файл
+            fs.unlinkSync(filePath);
+            res.status(400).json({ message: 'Файл с таким именем уже существует' });
+            return resolve();
+          }
+          
+          // Проверяем существование папки, если указана
+          if (folderId) {
+            const folder = await Folder.findById(folderId);
+            if (!folder) {
+              // Удаляем загруженный файл
+              fs.unlinkSync(filePath);
+              res.status(400).json({ message: 'Папка не найдена' });
+              return resolve();
+            }
+            
+            // Проверяем, принадлежит ли папка текущему пользователю
+            if (folder.user.toString() !== req.user!._id.toString() && !req.user!.isStaff) {
+              // Удаляем загруженный файл
+              fs.unlinkSync(filePath);
+              res.status(403).json({ message: 'Нет доступа к папке' });
+              return resolve();
+            }
+          }
+          
+          // Создаем запись о файле в базе данных
+          const file = new File({
+            name: originalname,
+            filename,
+            path: filePath,
+            size,
+            mimeType: mimetype, // Используем mimeType вместо mimetype
+            folder: folderId || null,
+            owner: req.user!._id, // Используем owner вместо user
+            type: 'file' // Добавляем тип, если он требуется для File модели
+          });
+          
+          await file.save();
+          
+          res.status(201).json(file);
+          return resolve();
+        } catch (error) {
+          console.error('Ошибка при сохранении файла:', error);
+          res.status(500).json({ message: 'Не удалось сохранить файл' });
+          return resolve();
+        }
       });
-      
-      await file.save();
-      
-      return res.status(201).json(file);
     });
   } catch (error) {
     console.error('Ошибка при загрузке файла:', error);
@@ -262,17 +276,27 @@ export const downloadFile = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Не авторизован' });
     }
 
-    const { id } = req.params;
+    const { fileId } = req.params;
     
-    // Находим файл в базе данных
-    const file = await File.findById(id);
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не указан' });
+    }
+    
+    // Получаем файл из базы данных
+    const file = await File.findById(fileId);
+    
     if (!file) {
       return res.status(404).json({ message: 'Файл не найден' });
     }
     
-    // Проверяем, принадлежит ли файл текущему пользователю
-    if (file.owner && file.owner.toString() !== req.user._id.toString() && !req.user.isStaff) {
+    // Проверяем доступ к файлу
+    if (file.owner.toString() !== req.user._id.toString() && !req.user.isStaff) {
       return res.status(403).json({ message: 'Нет доступа к файлу' });
+    }
+    
+    // Проверяем, что это действительно файл, а не папка
+    if (file.type === 'folder') {
+      return res.status(400).json({ message: 'Нельзя скачать папку' });
     }
     
     // Проверяем существование файла на диске
@@ -280,16 +304,64 @@ export const downloadFile = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Файл не найден на диске' });
     }
     
-    // Устанавливаем заголовки для скачивания
-    res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
-    res.setHeader('Content-Type', file.mimeType); // Используем mimeType вместо mimetype
-    
-    // Отправляем файл
-    const fileStream = fs.createReadStream(file.path);
-    return fileStream.pipe(res);
+    // Отправляем файл пользователю
+    return res.download(file.path, file.name);
   } catch (error) {
     console.error('Ошибка при скачивании файла:', error);
     return res.status(500).json({ message: 'Не удалось скачать файл' });
+  }
+};
+
+/**
+ * Удаление файла или папки
+ */
+export const deleteFile = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Не авторизован' });
+    }
+
+    const { fileId } = req.params;
+    
+    // Находим файл или папку в базе данных
+    const file = await File.findById(fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'Файл или папка не найдены' });
+    }
+    
+    // Проверяем, принадлежит ли файл или папка текущему пользователю
+    if (file.owner.toString() !== req.user._id.toString() && !req.user.isStaff) {
+      return res.status(403).json({ message: 'Нет доступа к файлу или папке' });
+    }
+    
+    // Если это папка, удаляем все файлы и подпапки внутри
+    if (file.type === 'folder') {
+      // Находим все файлы и подпапки в этой папке
+      const children = await File.find({ folder: fileId });
+      
+      // Рекурсивно удаляем все содержимое
+      for (const child of children) {
+        await File.findByIdAndDelete(child._id);
+        
+        // Если это файл, удаляем его с диска
+        if (child.type === 'file' && fs.existsSync(child.path)) {
+          fs.unlinkSync(child.path);
+        }
+      }
+    } else if (file.type === 'file') {
+      // Если это файл, удаляем его с диска
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    }
+    
+    // Удаляем запись из базы данных
+    await File.findByIdAndDelete(fileId);
+    
+    return res.json({ message: 'Файл или папка успешно удалены' });
+  } catch (error) {
+    console.error('Ошибка при удалении файла или папки:', error);
+    return res.status(500).json({ message: 'Не удалось удалить файл или папку' });
   }
 };
 
@@ -297,5 +369,6 @@ export default {
   getFiles,
   createFolder,
   uploadFile,
-  downloadFile
+  downloadFile,
+  deleteFile
 };

@@ -1,16 +1,18 @@
 import express from 'express';
-import { registerUser, loginUser, getCurrentUser } from '../controllers/authController';
 import { protect } from '../middleware/authMiddleware';
+import authController from '../controllers/authController';
 
 const router = express.Router();
 
-// Регистрация нового пользователя
-router.post('/register', registerUser);
+// Маршруты, не требующие аутентификации
+router.post('/register', authController.register);
+router.post('/login', authController.login);
 
-// Аутентификация пользователя
-router.post('/login', loginUser);
-
-// Получение данных текущего пользователя
-router.get('/me', protect, getCurrentUser);
+// Маршруты, требующие аутентификации
+router.use(protect);
+router.get('/me', authController.getUserProfile);
+router.put('/me', authController.updateUserProfile);
+router.post('/refresh-token', authController.refreshToken);
+router.post('/logout', authController.logout);
 
 export default router; 

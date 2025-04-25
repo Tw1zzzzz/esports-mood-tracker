@@ -1,66 +1,178 @@
 import jwt from 'jsonwebtoken';
+import { Response, NextFunction } from 'express';
 import User from '../models/User';
+import { AuthRequest, BaseAuthRequest, UserData } from './types';
 
-// Middleware для защиты маршрутов (требует аутентификации)
-export const protect = async (req: any, res: any, next: any) => {
+/**
+ * Middleware для проверки JWT токена и аутентификации пользователя
+ * @param req Запрос
+ * @param res Ответ
+ * @param next Следующий обработчик
+ */
+export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    console.log('[AuthMiddleware] Проверка токена для запроса:', req.originalUrl);
     let token;
 
-    // Проверяем наличие токена в заголовке Authorization
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    // Проверка наличия токена в заголовке или куках
+    if (
+      req.headers.authorization && 
+      req.headers.authorization.startsWith('Bearer')
+    ) {
+      // Получение токена из заголовка
       token = req.headers.authorization.split(' ')[1];
-      console.log('[AuthMiddleware] Токен получен из заголовка Authorization');
-    } else {
-      console.log('[AuthMiddleware] Токен не найден в заголовке Authorization');
-      return res.status(401).json({ message: 'Не авторизован. Токен отсутствует.' });
+    } else if (req.cookies && req.cookies.token) {
+      // Получение токена из cookie
+      token = req.cookies.token;
+    }
+
+    // Если токен не найден
+    if (!token) {
+      return res.status(401).json({ message: 'Не авторизован, токен отсутствует' });
     }
 
     try {
-      // Проверка токена
-      const secret = process.env.JWT_SECRET || 'your-secret-key';
-      const decoded = jwt.verify(token, secret) as { id: string };
-      console.log('[AuthMiddleware] Токен успешно проверен, ID пользователя:', decoded.id);
+      // Верификация токена
+      const decoded = jwt.verify(
+        token, 
+        process.env.JWT_SECRET || 'your-secret-key'
+      ) as { id: string };
 
       // Поиск пользователя по ID из токена
       const user = await User.findById(decoded.id).select('-password');
 
       if (!user) {
-        console.log('[AuthMiddleware] Пользователь не найден в базе данных');
         return res.status(401).json({ message: 'Пользователь не найден' });
       }
 
-      console.log(`[AuthMiddleware] Пользователь авторизован: ${user.name} (${user.role})`);
-      
-      // Добавляем пользователя в объект запроса
+      // Добавление пользователя в запрос
       req.user = user;
       next();
     } catch (error) {
-      console.error('[AuthMiddleware] Ошибка проверки токена:', error);
-      return res.status(401).json({ message: 'Не авторизован. Неверный токен.' });
+      console.error('[Auth Middleware] Ошибка верификации токена:', error);
+      return res.status(401).json({ message: 'Не авторизован, недействительный токен' });
     }
   } catch (error) {
-    console.error('[AuthMiddleware] Общая ошибка аутентификации:', error);
-    return res.status(500).json({ message: 'Ошибка сервера при аутентификации' });
+    console.error('[Auth Middleware] Ошибка в защитном middleware:', error);
+    res.status(500).json({ 
+      message: 'Внутренняя ошибка сервера',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
   }
 };
 
-// Middleware для проверки роли
-export const authorize = (roles: string[]) => {
-  return (req: any, res: any, next: any) => {
-    if (!req.user) {
-      console.log('[AuthMiddleware] Пользователь отсутствует в запросе');
-      return res.status(401).json({ message: 'Не авторизован' });
-    }
+/**
+ * Middleware для проверки роли пользователя
+ * @param roles Массив разрешенных ролей
+ */
+export const authorize = (roles: string[] = []) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      // Проверка наличия пользователя
+      if (!req.user) {
+        return res.status(401).json({ message: 'Не авторизован' });
+      }
 
-    if (!roles.includes(req.user.role)) {
-      console.log(`[AuthMiddleware] Доступ запрещен. Роль пользователя: ${req.user.role}, требуемые роли: ${roles.join(', ')}`);
-      return res.status(403).json({ message: 'Доступ запрещен' });
-    }
+      // Если роли не указаны, разрешаем доступ всем аутентифицированным пользователям
+      if (roles.length === 0) {
+        return next();
+      }
 
-    console.log(`[AuthMiddleware] Доступ разрешен для роли: ${req.user.role}`);
-    next();
+      // Проверка роли пользователя
+      if (!roles.includes(req.user.role)) {
+        return res.status(403).json({ 
+          message: 'Доступ запрещен, недостаточно прав' 
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('[Auth Middleware] Ошибка в middleware авторизации:', error);
+      res.status(500).json({ 
+        message: 'Внутренняя ошибка сервера',
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+      });
+    }
   };
+};
+
+/**
+ * Middleware для базовой авторизации без доступа к модели User
+ * Используется для маршрутов, которым не требуется полная модель пользователя
+ */
+export const basicAuth = async (req: BaseAuthRequest, res: Response, next: NextFunction) => {
+  try {
+    let token;
+
+    // Проверка наличия токена в заголовке или куках
+    if (
+      req.headers.authorization && 
+      req.headers.authorization.startsWith('Bearer')
+    ) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+
+    // Если токен не найден
+    if (!token) {
+      return res.status(401).json({ message: 'Не авторизован, токен отсутствует' });
+    }
+
+    try {
+      // Верификация токена
+      const decoded = jwt.verify(
+        token, 
+        process.env.JWT_SECRET || 'your-secret-key'
+      ) as { id: string };
+
+      // Добавление userId в запрос
+      req.user = { _id: decoded.id, id: decoded.id };
+      next();
+    } catch (error) {
+      console.error('[Auth Middleware] Ошибка верификации токена:', error);
+      return res.status(401).json({ message: 'Не авторизован, недействительный токен' });
+    }
+  } catch (error) {
+    console.error('[Auth Middleware] Ошибка в базовом middleware авторизации:', error);
+    res.status(500).json({ 
+      message: 'Внутренняя ошибка сервера',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+/**
+ * Middleware для проверки прав администратора
+ * @param req Запрос
+ * @param res Ответ
+ * @param next Следующий обработчик
+ */
+export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Не авторизован' });
+  }
+  
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ 
+      message: 'Доступ запрещен, требуются права администратора' 
+    });
+  }
+  
+  next();
+};
+
+/**
+ * Middleware для проверки прав стаффа (персонала)
+ * @param req Запрос Express с добавленным полем user
+ * @param res Ответ Express
+ * @param next Функция для перехода к следующему middleware
+ */
+export const staff = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user && (req.user.isAdmin || req.user.role === 'staff')) {
+    return next();
+  } else {
+    return res.status(403).json({ message: 'Нет доступа, требуются права сотрудника' });
+  }
 };
 
 // Middleware для проверки прав администратора
