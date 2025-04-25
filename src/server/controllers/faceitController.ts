@@ -1,13 +1,6 @@
 import { Request, Response } from 'express';
 import faceitService from '../services/faceitService';
-
-// Расширяем интерфейс Request для работы с пользователем
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    faceitAccountId?: string;
-  };
-}
+import { AuthRequest } from '../middleware/types';
 
 // Константы для конфигурации OAuth
 const FACEIT_CLIENT_ID = process.env.FACEIT_CLIENT_ID || 'YOUR_FACEIT_CLIENT_ID';
@@ -32,10 +25,10 @@ export const initOAuth = (req: Request, res: Response) => {
     const authorizationUrl = faceitService.initOAuth(FACEIT_CLIENT_ID, REDIRECT_URI);
     
     // Возвращаем URL для редиректа
-    res.json({ url: authorizationUrl });
+    return res.json({ url: authorizationUrl });
   } catch (error) {
     console.error('Ошибка при инициализации OAuth:', error);
-    res.status(500).json({ message: 'Не удалось инициализировать OAuth' });
+    return res.status(500).json({ message: 'Не удалось инициализировать OAuth' });
   }
 };
 
@@ -76,7 +69,7 @@ export const oauthCallback = async (req: AuthRequest, res: Response) => {
     
     // Сохраняем информацию об аккаунте Faceit
     const faceitAccount = await faceitService.saveFaceitAccount(
-      req.user.id,
+      req.user.id as string,
       userInfo.guid,
       tokensData.access_token,
       tokensData.refresh_token,
@@ -89,10 +82,10 @@ export const oauthCallback = async (req: AuthRequest, res: Response) => {
       .catch(err => console.error('Ошибка при импорте матчей:', err));
     
     // Перенаправляем на страницу аналитики
-    res.redirect('/analytics');
+    return res.redirect('/analytics');
   } catch (error) {
     console.error('Ошибка при обработке callback OAuth:', error);
-    res.status(500).json({ message: 'Не удалось обработать ответ OAuth' });
+    return res.status(500).json({ message: 'Не удалось обработать ответ OAuth' });
   }
 };
 
@@ -114,10 +107,10 @@ export const importMatches = async (req: AuthRequest, res: Response) => {
     // Импортируем матчи
     const importedCount = await faceitService.importMatches(req.user.faceitAccountId);
     
-    res.json({ message: `Импортировано ${importedCount} матчей` });
+    return res.json({ message: `Импортировано ${importedCount} матчей` });
   } catch (error) {
     console.error('Ошибка при импорте матчей:', error);
-    res.status(500).json({ message: 'Не удалось импортировать матчи' });
+    return res.status(500).json({ message: 'Не удалось импортировать матчи' });
   }
 };
 
@@ -133,10 +126,108 @@ export const checkFaceitStatus = async (req: AuthRequest, res: Response) => {
     
     const isConnected = Boolean(req.user.faceitAccountId);
     
-    res.json({ connected: isConnected });
+    return res.json({ connected: isConnected });
   } catch (error) {
     console.error('Ошибка при проверке статуса Faceit:', error);
-    res.status(500).json({ message: 'Не удалось проверить статус Faceit' });
+    return res.status(500).json({ message: 'Не удалось проверить статус Faceit' });
+  }
+};
+
+/**
+ * Привязка аккаунта Faceit к пользователю
+ * @route POST /api/faceit/connect
+ */
+export const connectFaceitAccount = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Не авторизован' });
+    }
+    
+    const { faceitId, faceitNickname } = req.body;
+    
+    if (!faceitId || !faceitNickname) {
+      return res.status(400).json({ message: 'Требуется указать идентификатор и никнейм Faceit' });
+    }
+    
+    // Привязка аккаунта Faceit
+    const result = await faceitService.connectFaceitAccount(req.user.id as string, faceitId, faceitNickname);
+    
+    return res.json(result);
+  } catch (error) {
+    console.error('Ошибка при привязке аккаунта Faceit:', error);
+    return res.status(500).json({ message: 'Не удалось привязать аккаунт Faceit' });
+  }
+};
+
+/**
+ * Поиск статистики игрока Faceit
+ * @route GET /api/faceit/player/:nickname
+ */
+export const getPlayerStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const { nickname } = req.params;
+    
+    if (!nickname) {
+      return res.status(400).json({ message: 'Необходимо указать никнейм игрока' });
+    }
+    
+    // Получение статистики игрока Faceit
+    const playerStats = await faceitService.getPlayerStats(nickname);
+    
+    return res.json(playerStats);
+  } catch (error) {
+    console.error('Ошибка при получении статистики игрока Faceit:', error);
+    return res.status(500).json({ message: 'Не удалось получить статистику игрока' });
+  }
+};
+
+/**
+ * Обработка OAuth редиректа от Faceit
+ * @route GET /api/faceit/oauth/callback
+ */
+export const faceitOauthCallback = async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code) {
+      return res.status(400).json({ message: 'Отсутствует код авторизации' });
+    }
+    
+    // Обработка OAuth колбэка и получение токена
+    const result = await faceitService.handleOauthCallback(code as string);
+    
+    // Ответ обычно перенаправляет на фронтенд с токеном
+    return res.redirect(`/auth/faceit/complete?token=${result.token}`);
+  } catch (error) {
+    console.error('Ошибка при обработке OAuth редиректа от Faceit:', error);
+    return res.status(500).json({ message: 'Не удалось обработать авторизацию Faceit' });
+  }
+};
+
+/**
+ * Получение матчей игрока Faceit
+ * @route GET /api/faceit/matches/:playerId
+ */
+export const getPlayerMatches = async (req: AuthRequest, res: Response) => {
+  try {
+    const { playerId } = req.params;
+    const { limit, offset } = req.query;
+    
+    if (!playerId) {
+      return res.status(400).json({ message: 'Необходимо указать ID игрока' });
+    }
+    
+    // Получение матчей игрока Faceit
+    const matches = await faceitService.getPlayerMatches(
+      playerId,
+      Number(limit) || 10,
+      Number(offset) || 0
+    );
+    
+    return res.json(matches);
+  } catch (error) {
+    console.error('Ошибка при получении матчей игрока Faceit:', error);
+    return res.status(500).json({ message: 'Не удалось получить матчи игрока' });
   }
 };
 
@@ -144,5 +235,9 @@ export default {
   initOAuth,
   oauthCallback,
   importMatches,
-  checkFaceitStatus
+  checkFaceitStatus,
+  connectFaceitAccount,
+  getPlayerStats,
+  faceitOauthCallback,
+  getPlayerMatches
 }; 

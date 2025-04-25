@@ -1,13 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import analyticsService from '../services/analyticsService';
-
-// Расширяем интерфейс Request для работы с пользователем
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    faceitAccountId?: string;
-  };
-}
+import { AuthRequest } from '../middleware/types';
 
 /**
  * Получает статистику пользователя
@@ -27,16 +20,16 @@ export const getUserStats = async (req: AuthRequest, res: Response) => {
     
     // Получаем статистику пользователя
     const stats = await analyticsService.getUserStats(
-      req.user.id,
+      req.user.id as string,
       fromDate,
       toDate,
       type as string
     );
     
-    res.json(stats);
+    return res.json(stats);
   } catch (error) {
     console.error('Ошибка при получении статистики пользователя:', error);
-    res.status(500).json({ message: 'Не удалось получить статистику' });
+    return res.status(500).json({ message: 'Не удалось получить статистику' });
   }
 };
 
@@ -58,16 +51,16 @@ export const saveMetrics = async (req: AuthRequest, res: Response) => {
     
     // Сохраняем метрики пользователя
     const metrics = await analyticsService.savePlayerMetrics(
-      req.user.id,
+      req.user.id as string,
       mood,
       balanceWheel,
       matchId
     );
     
-    res.json(metrics);
+    return res.json(metrics);
   } catch (error) {
     console.error('Ошибка при сохранении метрик пользователя:', error);
-    res.status(500).json({ message: 'Не удалось сохранить метрики' });
+    return res.status(500).json({ message: 'Не удалось сохранить метрики' });
   }
 };
 
@@ -84,12 +77,12 @@ export const getMetrics = async (req: AuthRequest, res: Response) => {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
     
     // Получаем метрики пользователя
-    const metrics = await analyticsService.getPlayerMetrics(req.user.id, limit);
+    const metrics = await analyticsService.getPlayerMetrics(req.user.id as string, limit);
     
-    res.json(metrics);
+    return res.json(metrics);
   } catch (error) {
     console.error('Ошибка при получении метрик пользователя:', error);
-    res.status(500).json({ message: 'Не удалось получить метрики' });
+    return res.status(500).json({ message: 'Не удалось получить метрики' });
   }
 };
 
@@ -109,15 +102,15 @@ export const getRecentMatches = async (req: AuthRequest, res: Response) => {
     
     // Получаем статистику с недавними матчами
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-    const stats = await analyticsService.getUserStats(req.user.id);
+    const stats = await analyticsService.getUserStats(req.user.id as string);
     
     // Возвращаем только последние матчи
-    res.json({
+    return res.json({
       matches: stats.recentMatches.slice(0, limit)
     });
   } catch (error) {
     console.error('Ошибка при получении последних матчей:', error);
-    res.status(500).json({ message: 'Не удалось получить последние матчи' });
+    return res.status(500).json({ message: 'Не удалось получить последние матчи' });
   }
 };
 
@@ -125,17 +118,17 @@ export const getRecentMatches = async (req: AuthRequest, res: Response) => {
  * Ручной запуск обновления кэша аналитики
  * @route POST /api/analytics/refresh-cache
  */
-export const refreshCache = async (req: Request, res: Response) => {
+export const refreshCache = async (req: AuthRequest, res: Response) => {
   try {
     // Запускаем обновление кэша в фоновом режиме
     analyticsService.updateAnalyticsCache()
       .then(() => console.log('Обновление кэша завершено'))
       .catch(err => console.error('Ошибка при обновлении кэша:', err));
     
-    res.json({ message: 'Запущено обновление кэша' });
+    return res.json({ message: 'Запущено обновление кэша' });
   } catch (error) {
     console.error('Ошибка при запуске обновления кэша:', error);
-    res.status(500).json({ message: 'Не удалось запустить обновление кэша' });
+    return res.status(500).json({ message: 'Не удалось запустить обновление кэша' });
   }
 };
 
