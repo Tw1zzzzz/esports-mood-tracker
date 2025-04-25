@@ -130,10 +130,10 @@ router.delete('/players/:id', protect, isStaff, async (req, res) => {
     }
     
     console.log(`Player deleted successfully: ${playerId}`);
-    res.json({ success: true, message: 'Игрок успешно удален' });
+    return res.json({ success: true, message: 'Игрок успешно удален' });
   } catch (error) {
     console.error('Error deleting player:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера при удалении игрока' });
+    return res.status(500).json({ success: false, message: 'Ошибка сервера при удалении игрока' });
   }
 });
 
@@ -201,7 +201,7 @@ router.delete('/players/:id/complete', protect, isStaff, async (req, res) => {
     const deletedPlayer = await User.findByIdAndDelete(playerId);
     
     console.log(`Player completely deleted with all related data: ${playerInfo.name} (${playerId})`);
-    res.json({ 
+    return res.json({ 
       success: true, 
       message: 'Игрок и все связанные данные успешно удалены',
       player: playerInfo 
@@ -209,7 +209,7 @@ router.delete('/players/:id/complete', protect, isStaff, async (req, res) => {
     
   } catch (error) {
     console.error('Error performing complete player deletion:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: 'Ошибка сервера при каскадном удалении игрока',
       error: error.message 
