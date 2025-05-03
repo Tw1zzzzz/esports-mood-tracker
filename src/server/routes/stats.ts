@@ -55,7 +55,7 @@ router.get('/players/mood', protect, isStaff, async (_req: any, res) => {
     allMoodEntries.forEach(entry => {
       if (!entry.userId) return;
       
-      const userId = entry.userId.toString();
+      const userId = (entry.userId as any)._id.toString();
       const userName = (entry.userId as any).name || 'Неизвестный игрок';
       
       if (!userMoodMap.has(userId)) {
