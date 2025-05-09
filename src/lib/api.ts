@@ -3,44 +3,12 @@ import ROUTES from './routes';
 
 // Создаем экземпляр axios с базовыми настройками
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
   // Добавляем таймаут для выявления проблем с подключением
   timeout: 15000
-});
-
-// Функция для обновления baseURL
-export const updateApiBaseUrl = (port: number = 5000) => {
-  api.defaults.baseURL = `http://localhost:${port}/api`;
-};
-
-// Оптимизированная функция для проверки доступных портов сервера
-const checkServerPort = async () => {
-  const ports = [5000, 5001, 5002];
-  
-  for (const port of ports) {
-    try {
-      const response = await axios.get(`http://localhost:${port}/health`, { timeout: 2000 });
-      if (response.status === 200) {
-        updateApiBaseUrl(port);
-        return true;
-      }
-    } catch (error) {
-      // Продолжаем проверку следующего порта
-    }
-  }
-  
-  return false;
-};
-
-// Инициализация проверки порта
-checkServerPort().then(success => {
-  if (!success) {
-    // Повторная проверка через 5 секунд, если не удалось подключиться
-    setTimeout(checkServerPort, 5000);
-  }
 });
 
 // Функция для повторных попыток запроса
@@ -78,9 +46,6 @@ api.interceptors.response.use((response) => {
     if (error.response.status === 401 && window.location.pathname !== ROUTES.WELCOME) {
       window.location.href = `${ROUTES.WELCOME}?session=expired`;
     }
-  } else if (error.request) {
-    // Проблема с соединением, проверяем порт
-    checkServerPort();
   }
   
   return Promise.reject(error);
